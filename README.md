@@ -35,3 +35,7 @@ Potion use removes inventory (mock on-chain burn). Real ERC-4337 / Robinhood Cha
 ## Contracts (stub)
 
 See `contracts/README.md`. MVP does not deploy; inventory is server-authoritative mock state.
+
+## License
+
+This project is licensed under the GNU General Public License v3.0. See the [LICENSE](LICENSE) file for details.
