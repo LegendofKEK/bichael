@@ -1,0 +1,19 @@
+{
+  "name": "bellgrave",
+  "private": true,
+  "version": "0.1.0",
+  "scripts": {
+    "dev": "pnpm -r --parallel --filter @bellgrave/server --filter @bellgrave/web run dev",
+    "dev:server": "pnpm --filter @bellgrave/server dev",
+    "dev:web": "pnpm --filter @bellgrave/web dev",
+    "build": "pnpm -r run build",
+    "typecheck": "pnpm -r run typecheck"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "packageManager": "pnpm@10.12.4",
+  "pnpm": {
+    "onlyBuiltDependencies": ["esbuild"]
+  }
+}

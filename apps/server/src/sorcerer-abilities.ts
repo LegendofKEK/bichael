@@ -1,0 +1,466 @@
+/**
+ * Sorcerer ability resolution — elemental nuker kit.
+ * Motifs: violet/blue cast windows + per-element impact colors (not TIM teal).
+ */
+import {
+  SORCERER_ABILITIES,
+  isSorcererAbilityId,
+  jobStatsAtLevel,
+  type SorcererAbilityId,
+  type SorcererElement,
+} from "@bellgrave/combat";
+import { ITEM } from "@bellgrave/config";
+import type { AbilityId } from "@bellgrave/protocol";
+
+export type SorcererPlayer = {
+  level: number;
+  job: string;
+  mp: number;
+  maxMp: number;
+  hp: number;
+  maxHp: number;
+  tp: number;
+  equip: { main: number | null; body: number | null };
+  inventory: { tokenId: number; amount: number }[];
+  anim: string;
+  animUntil: number;
+  moveTo: { x: number; z: number } | null;
+  targetId: string | null;
+  facing: number;
+  x: number;
+  z: number;
+  recasts: Partial<Record<AbilityId, number>>;
+  arcaneFloodUntil: number;
+  elementalSealUntil: number;
+  manaWallUntil: number;
+  manawellReady: boolean;
+  cascadeUntil: number;
+  focalNeveUntil: number;
+  enmity: number;
+  /** Last elemental nuke element — for client VFX hue. */
+  lastScElement: SorcererElement | null;
+  scCastFlashUntil: number;
+};
+
+export type SorcererMob = {
+  id: string;
+  name?: string;
+  alive: boolean;
+  x: number;
+  z: number;
+  hp: number;
+  maxHp: number;
+  mp?: number;
+  targetId: string | null;
+  nextSwingAt: number;
+  stunUntil: number;
+  blindUntil: number;
+  bindUntil: number;
+  sleepUntil: number;
+  falseGuardUntil?: number;
+  scImpactUntil: number;
+  scImpactElement: SorcererElement | null;
+};
+
+export type SorcererHooks = {
+  pushLog: (p: SorcererPlayer, msg: string) => void;
+  stopRest: (p: SorcererPlayer, reason?: string) => void;
+  facingTo: (ax: number, az: number, bx: number, bz: number) => number;
+  findMob: (id: string | null | undefined) => SorcererMob | null;
+  allMobs: () => SorcererMob[];
+  onMobKill: (p: SorcererPlayer, m: SorcererMob, now: number) => void;
+  dist: (ax: number, az: number, bx: number, bz: number) => number;
+};
+
+function invAmount(inv: SorcererPlayer["inventory"], tokenId: number): number {
+  return inv.find((i) => i.tokenId === tokenId)?.amount ?? 0;
+}
+
+export function staffEquipped(p: SorcererPlayer): boolean {
+  return p.equip.main === ITEM.STAFF_ASHBEAM && invAmount(p.inventory, ITEM.STAFF_ASHBEAM) > 0;
+}
+
+function stats(p: SorcererPlayer) {
+  const lv =
+    p.job === "sorcerer" ? p.level : Math.max(1, Math.floor(p.level / 2));
+  return jobStatsAtLevel("sorcerer", lv);
+}
+
+function elementalDamage(
+  p: SorcererPlayer,
+  potency: number,
+  now: number,
+  cascadeBonus: boolean,
+): number {
+  const { int, mnd } = stats(p);
+  let base = potency * 0.52 + int * 2.85 + mnd * 0.35;
+  if (now < p.elementalSealUntil) base *= 1.45;
+  if (now < p.focalNeveUntil) base *= 1.22;
+  if (cascadeBonus) base *= 1.35;
+  return Math.max(1, Math.floor(base));
+}
+
+function spendMp(p: SorcererPlayer, cost: number, now: number): boolean {
+  if (now < p.arcaneFloodUntil) return true;
+  if (p.manawellReady && cost > 0) {
+    p.manawellReady = false;
+    return true;
+  }
+  if (p.mp < cost) return false;
+  p.mp -= cost;
+  return true;
+}
+
+function mobsInRadius(mobs: SorcererMob[], x: number, z: number, r: number): SorcererMob[] {
+  return mobs.filter((m) => m.alive && Math.hypot(m.x - x, m.z - z) <= r);
+}
+
+function applyNukeHit(
+  p: SorcererPlayer,
+  m: SorcererMob,
+  dmg: number,
+  element: SorcererElement,
+  now: number,
+) {
+  m.hp = Math.max(0, m.hp - dmg);
+  m.scImpactUntil = now + 900;
+  m.scImpactElement = element;
+  p.enmity = Math.min(10_000, p.enmity + Math.floor(dmg * 0.35));
+}
+
+export function clearSorcererBuffs(p: SorcererPlayer) {
+  p.arcaneFloodUntil = 0;
+  p.elementalSealUntil = 0;
+  p.manaWallUntil = 0;
+  p.manawellReady = false;
+  p.cascadeUntil = 0;
+  p.focalNeveUntil = 0;
+  p.lastScElement = null;
+  p.scCastFlashUntil = 0;
+}
+
+export function resolveSorcererAbility(
+  p: SorcererPlayer & { wallet: string },
+  id: AbilityId,
+  targetId: string | undefined,
+  now: number,
+  hooks: SorcererHooks,
+): boolean {
+  if (p.job !== "sorcerer" && (p as { subjob?: string | null }).subjob !== "sorcerer") return false;
+  if (!isSorcererAbilityId(id)) {
+    hooks.pushLog(p, "That is not a Sorcerer ability.");
+    return true;
+  }
+
+  const def = SORCERER_ABILITIES[id];
+  const effLevel =
+    p.job === "sorcerer" ? p.level : Math.max(1, Math.floor(p.level / 2));
+  if (effLevel < def.unlockLevel) {
+    hooks.pushLog(p, `${def.label} unlocks at level ${def.unlockLevel}.`);
+    return true;
+  }
+
+  const readyAt = p.recasts[id] ?? 0;
+  if (now < readyAt) {
+    hooks.pushLog(p, `${def.label} not ready.`);
+    return true;
+  }
+
+  if (def.staffRequired && !staffEquipped(p)) {
+    hooks.pushLog(p, "Equip your staff first.");
+    return true;
+  }
+
+  const payRecast = () => {
+    if (def.recastMs > 0) p.recasts[id] = now + def.recastMs;
+  };
+
+  if (id === "rest") {
+    if (p.anim === "rest") {
+      hooks.stopRest(p);
+      hooks.pushLog(p, "You stand.");
+      return true;
+    }
+    p.moveTo = null;
+    p.targetId = null;
+    p.anim = "rest";
+    p.animUntil = now + 60_000;
+    hooks.pushLog(p, "You kneel among the runes and recover.");
+    return true;
+  }
+
+  hooks.stopRest(p);
+
+  const mpCost = def.mp;
+  if (mpCost > 0 && now >= p.arcaneFloodUntil && !p.manawellReady && p.mp < mpCost) {
+    hooks.pushLog(p, "Not enough MP.");
+    return true;
+  }
+
+  // —— Job abilities ——
+  if (id === "arcane_flood") {
+    payRecast();
+    p.arcaneFloodUntil = now + (def.durationMs ?? 60_000);
+    p.scCastFlashUntil = now + 1200;
+    p.anim = "cast";
+    p.animUntil = now + 700;
+    hooks.pushLog(p, `${def.label} — the neve opens; cast without cost!`);
+    return true;
+  }
+  if (id === "elemental_seal") {
+    payRecast();
+    p.elementalSealUntil = now + (def.durationMs ?? 60_000);
+    p.anim = "cast";
+    p.animUntil = now + 550;
+    hooks.pushLog(p, `${def.label} — the next element obeys.`);
+    return true;
+  }
+  if (id === "mana_wall") {
+    payRecast();
+    p.manaWallUntil = now + (def.durationMs ?? 60_000);
+    p.anim = "cast";
+    p.animUntil = now + 500;
+    hooks.pushLog(p, `${def.label} — mana becomes your bulwark.`);
+    return true;
+  }
+  if (id === "manawell") {
+    payRecast();
+    p.manawellReady = true;
+    p.anim = "cast";
+    p.animUntil = now + 450;
+    hooks.pushLog(p, `${def.label} — the next spell is free.`);
+    return true;
+  }
+  if (id === "enmity_douse") {
+    payRecast();
+    p.enmity = 0;
+    for (const m of hooks.allMobs()) {
+      if (m.targetId === p.wallet) m.targetId = null;
+    }
+    p.anim = "cast";
+    p.animUntil = now + 400;
+    hooks.pushLog(p, `${def.label} — hate washes away.`);
+    return true;
+  }
+  if (id === "cascade") {
+    payRecast();
+    p.cascadeUntil = now + (def.durationMs ?? 30_000);
+    p.anim = "cast";
+    p.animUntil = now + 450;
+    hooks.pushLog(p, `${def.label} — chain the next burst!`);
+    return true;
+  }
+  if (id === "focal_neve") {
+    payRecast();
+    p.focalNeveUntil = now + (def.durationMs ?? 60_000);
+    p.scCastFlashUntil = now + 1000;
+    p.anim = "cast";
+    p.animUntil = now + 600;
+    hooks.pushLog(p, `${def.label} — INT surges through the neve.`);
+    return true;
+  }
+
+  if (id === "sc_phase_warp") {
+    if (!spendMp(p, mpCost, now)) {
+      hooks.pushLog(p, "Not enough MP.");
+      return true;
+    }
+    payRecast();
+    p.x = 0;
+    p.z = 20;
+    p.moveTo = null;
+    p.targetId = null;
+    p.anim = "cast";
+    p.animUntil = now + 800;
+    hooks.pushLog(p, `${def.label} — you blink to the hall mouth.`);
+    return true;
+  }
+  if (id === "sc_ash_escape") {
+    if (!spendMp(p, mpCost, now)) {
+      hooks.pushLog(p, "Not enough MP.");
+      return true;
+    }
+    payRecast();
+    p.z = Math.min(24, p.z + 6);
+    p.moveTo = null;
+    p.anim = "cast";
+    p.animUntil = now + 500;
+    hooks.pushLog(p, `${def.label} — you slip back from the fray.`);
+    return true;
+  }
+
+  // —— Elemental nukes ——
+  if (def.category === "elemental" && def.potency != null && def.element) {
+    const cascadeBonus = now < p.cascadeUntil;
+    if (cascadeBonus) p.cascadeUntil = 0;
+
+    if (def.isGa && def.aoe) {
+      const tid = targetId ?? p.targetId;
+      const anchor = hooks.findMob(tid);
+      const cx = anchor?.x ?? p.x;
+      const cz = anchor?.z ?? p.z;
+      if (anchor && hooks.dist(p.x, p.z, anchor.x, anchor.z) > (def.range ?? 12)) {
+        hooks.pushLog(p, "Too far.");
+        return true;
+      }
+      if (!spendMp(p, mpCost, now)) {
+        hooks.pushLog(p, "Not enough MP.");
+        return true;
+      }
+      payRecast();
+      if (anchor) p.facing = hooks.facingTo(p.x, p.z, anchor.x, anchor.z);
+      p.elementalSealUntil = 0;
+      p.lastScElement = def.element;
+      p.scCastFlashUntil = now + 650;
+      p.anim = "cast";
+      p.animUntil = now + 620;
+      const dmg = elementalDamage(p, def.potency, now, cascadeBonus);
+      let hits = 0;
+      for (const m of mobsInRadius(hooks.allMobs(), cx, cz, def.aoe)) {
+        applyNukeHit(p, m, dmg, def.element, now);
+        hits += 1;
+        if (m.hp <= 0) hooks.onMobKill(p, m, now);
+      }
+      hooks.pushLog(p, `${def.label} — ${dmg} on ${hits} foe(s)!`);
+      return true;
+    }
+
+    const tid = targetId ?? p.targetId;
+    const m = hooks.findMob(tid);
+    if (!m || !m.alive) {
+      hooks.pushLog(p, "No target.");
+      return true;
+    }
+    if (hooks.dist(p.x, p.z, m.x, m.z) > (def.range ?? 12)) {
+      hooks.pushLog(p, "Too far.");
+      return true;
+    }
+    if (!spendMp(p, mpCost, now)) {
+      hooks.pushLog(p, "Not enough MP.");
+      return true;
+    }
+    payRecast();
+    p.facing = hooks.facingTo(p.x, p.z, m.x, m.z);
+    p.elementalSealUntil = 0;
+    p.lastScElement = def.element;
+    p.scCastFlashUntil = now + 650;
+    p.anim = "cast";
+    p.animUntil = now + 580;
+    const dmg = elementalDamage(p, def.potency, now, cascadeBonus);
+    applyNukeHit(p, m, dmg, def.element, now);
+    hooks.pushLog(p, `${def.label} — ${dmg} on ${m.name ?? "foe"}!`);
+    if (m.hp <= 0) hooks.onMobKill(p, m, now);
+    return true;
+  }
+
+  // —— Enfeebles / dark ——
+  const tid = targetId ?? p.targetId;
+  const mob = hooks.findMob(tid);
+  if ((def.needsTarget || def.category === "enfeeble" || def.category === "dark") && def.category !== "travel") {
+    if (!mob || !mob.alive) {
+      hooks.pushLog(p, "No target.");
+      return true;
+    }
+    if (hooks.dist(p.x, p.z, mob.x, mob.z) > (def.range ?? 12)) {
+      hooks.pushLog(p, "Too far.");
+      return true;
+    }
+    if (!spendMp(p, mpCost, now)) {
+      hooks.pushLog(p, "Not enough MP.");
+      return true;
+    }
+    payRecast();
+    p.facing = hooks.facingTo(p.x, p.z, mob.x, mob.z);
+    p.anim = "cast";
+    p.animUntil = now + 520;
+
+    if (id === "sc_morrow_sleep") {
+      mob.sleepUntil = now + (def.durationMs ?? 45_000);
+      hooks.pushLog(p, `${def.label} — ${mob.name ?? "foe"} slumbers.`);
+      return true;
+    }
+    if (id === "sc_morrow_slumber") {
+      const r = def.aoe ?? 8;
+      let n = 0;
+      for (const m of mobsInRadius(hooks.allMobs(), mob.x, mob.z, r)) {
+        m.sleepUntil = now + (def.durationMs ?? 30_000);
+        n += 1;
+      }
+      hooks.pushLog(p, `${def.label} — ${n} foe(s) fall asleep.`);
+      return true;
+    }
+    if (id === "sc_mist_blind") {
+      mob.blindUntil = now + (def.durationMs ?? 90_000);
+      hooks.pushLog(p, `${def.label} — ${mob.name ?? "foe"} is blinded.`);
+      return true;
+    }
+    if (id === "sc_root_sigil") {
+      mob.bindUntil = now + (def.durationMs ?? 60_000);
+      hooks.pushLog(p, `${def.label} — roots hold ${mob.name ?? "foe"}.`);
+      return true;
+    }
+    if (id === "sc_unweave") {
+      let stripped = 0;
+      if (mob.falseGuardUntil && mob.falseGuardUntil > now) {
+        mob.falseGuardUntil = 0;
+        stripped += 1;
+      }
+      // Clear residual impact flashes / defensive feints only — not your enfeebles
+      if (mob.scImpactUntil > now) {
+        mob.scImpactUntil = 0;
+        mob.scImpactElement = null;
+        stripped += 1;
+      }
+      hooks.pushLog(
+        p,
+        stripped > 0
+          ? `${def.label} — buffs stripped from ${mob.name ?? "foe"}.`
+          : `${def.label} — nothing to unravel on ${mob.name ?? "foe"}.`,
+      );
+      return true;
+    }
+    if (id === "sc_life_leech") {
+      const dmg = elementalDamage(p, def.potency ?? 45, now, false);
+      mob.hp = Math.max(0, mob.hp - dmg);
+      const heal = Math.floor(dmg * 0.6);
+      p.hp = Math.min(p.maxHp, p.hp + heal);
+      mob.scImpactUntil = now + 700;
+      mob.scImpactElement = "dark";
+      hooks.pushLog(p, `${def.label} — ${dmg} drained, +${heal} HP.`);
+      if (mob.hp <= 0) hooks.onMobKill(p, mob, now);
+      return true;
+    }
+    if (id === "sc_mana_siphon") {
+      const want = Math.min(40, Math.max(8, Math.floor(stats(p).int * 0.8)));
+      const available = typeof mob.mp === "number" ? mob.mp : 0;
+      const drain = Math.min(want, available);
+      if (drain <= 0) {
+        hooks.pushLog(p, `${def.label} — no mana to siphon.`);
+        return true;
+      }
+      mob.mp = available - drain;
+      p.mp = Math.min(p.maxMp, p.mp + drain);
+      hooks.pushLog(p, `${def.label} — siphoned ${drain} MP.`);
+      return true;
+    }
+    if (id === "sc_gloom_stun") {
+      const dmg = Math.floor(elementalDamage(p, 35, now, false) * 0.5);
+      mob.hp = Math.max(0, mob.hp - dmg);
+      mob.stunUntil = now + (def.durationMs ?? 5_000);
+      mob.scImpactUntil = now + 800;
+      mob.scImpactElement = "dark";
+      hooks.pushLog(p, `${def.label} — ${dmg} and stun!`);
+      if (mob.hp <= 0) hooks.onMobKill(p, mob, now);
+      return true;
+    }
+  }
+
+  hooks.pushLog(p, `${def.label} is not implemented yet.`);
+  return true;
+}
+
+/** Magic damage taken multiplier while Mana Wall is active. */
+export function sorcererMagDtMul(p: SorcererPlayer, now: number): number {
+  if (now < p.manaWallUntil) return 0.55;
+  return 1;
+}
