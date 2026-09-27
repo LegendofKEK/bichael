@@ -12,3 +12,4 @@ out
 broadcast
 tmp/
 *.LOCK.bak.png
+__pycache__/
