@@ -2,7 +2,6 @@ import {
   JOBS,
   MAX_LEVEL,
   REST_TICK,
-  SWING_BASE_MS,
   TIM_ABILITIES,
   SUBJOB_UNLOCK_LEVEL,
   FREE_STAT_POINTS,
@@ -43,6 +42,7 @@ import {
   skillPointsSpentOnTree,
   subjobLevel,
   swingDelayMs,
+  resolveSwingDelayMs,
   TIM_ABILITY_IDS,
   timSpellDustCost,
   timSpellsForSale,
@@ -1492,6 +1492,25 @@ function stopRest(p: Player, reason?: string) {
   else pushLog(p, "You stop resting.");
 }
 
+function respawnAtHub(p: Player, reason = "You fall… and wake in the Shard Dwellings.") {
+  stopRest(p);
+  clearJobBuffs(p);
+  p.hp = Math.max(1, Math.floor(p.maxHp * 0.3));
+  p.x = PH_HUB_SPAWN.x;
+  p.z = PH_HUB_SPAWN.z;
+  syncUnitY(p);
+  p.moveTo = null;
+  p.targetId = null;
+  p.anim = "idle";
+  p.animUntil = 0;
+  p.nextSwingAt = 0;
+  // Mob hate: drop this player as a target when they warp home.
+  for (const m of mobs) {
+    if (m.targetId === p.wallet) m.targetId = null;
+  }
+  pushLog(p, reason);
+}
+
 function clearJobBuffs(p: Player) {
   p.flux = false;
   p.aether = false;
@@ -2120,7 +2139,8 @@ function playerSwing(p: Player, now: number) {
   if (now < p.nextSwingAt) return;
 
   const haste = playerHastePct(p, now);
-  const delay = swingDelayMs(SWING_BASE_MS, haste);
+  const weaponDelay = p.equip.main ? getItem(p.equip.main)?.delayMs : undefined;
+  const delay = resolveSwingDelayMs(weaponDelay, haste);
   p.nextSwingAt = now + delay;
   p.facing = facingTo(p.x, p.z, mob.x, mob.z);
   p.anim = "melee";
@@ -2400,15 +2420,7 @@ function mobSwing(mob: Mob, now: number) {
       nearest.sacredLightUntil = now + 2200;
       pushLog(nearest, "Ember Vigil — you rise in sacred light!");
     } else {
-      nearest.hp = Math.floor(nearest.maxHp * 0.3);
-      nearest.x = PH_HUB_SPAWN.x;
-      nearest.z = PH_HUB_SPAWN.z;
-      syncUnitY(nearest);
-      nearest.moveTo = null;
-      nearest.targetId = null;
-      nearest.flux = false;
-      nearest.aether = false;
-      pushLog(nearest, "You fall… and wake in the Shard Dwellings.");
+      respawnAtHub(nearest);
     }
   }
 }
