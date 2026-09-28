@@ -26,12 +26,12 @@ export function PartyPanel({ party, invite, selectedTarget, myWallet, onClose }:
   const selectedPlayer = nearbyPlayers.find((u) => u.id === selectedTarget) ?? null;
 
   return (
-    <div className="party-panel" role="dialog" aria-label="Party">
-      <div className="party-panel-head">
+    <div className="cmd-panel party-panel" role="dialog" aria-label="Party">
+      <div className="cmd-panel-head">
         <div>
-          <div className="settings-kicker">Group</div>
-          <div className="settings-panel-title">Party</div>
-          <div className="settings-panel-sub">
+          <div className="cmd-kicker">Group</div>
+          <div className="cmd-panel-title">Party</div>
+          <div className="cmd-panel-sub">
             Up to 10 others · shared heals, buffs &amp; combat
           </div>
         </div>
@@ -66,7 +66,7 @@ export function PartyPanel({ party, invite, selectedTarget, myWallet, onClose }:
 
       {!party ? (
         <div className="settings-card party-solo">
-          <div className="settings-section-label">Not in a party</div>
+          <div className="cmd-section-label">Not in a party</div>
           <p className="party-hint">
             Select another player in the world, or pick someone nearby, then invite.
           </p>
@@ -100,7 +100,7 @@ export function PartyPanel({ party, invite, selectedTarget, myWallet, onClose }:
         </div>
       ) : (
         <div className="settings-card">
-          <div className="settings-section-label">
+          <div className="cmd-section-label">
             Members ({party.members.length}/11)
           </div>
           <div className="party-member-list">
@@ -141,7 +141,7 @@ export function PartyPanel({ party, invite, selectedTarget, myWallet, onClose }:
 
           {isLeader && (
             <div className="party-invite-block">
-              <div className="settings-section-label">Invite</div>
+              <div className="cmd-section-label">Invite</div>
               {selectedPlayer ? (
                 <button
                   type="button"
