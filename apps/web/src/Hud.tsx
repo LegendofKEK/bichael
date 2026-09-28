@@ -16,6 +16,7 @@ import {
   type JobId,
 } from "@bellgrave/combat";
 import { ITEM } from "@bellgrave/config";
+import { getItem } from "@bellgrave/items";
 import type { AbilityId, UnitSnapshot } from "@bellgrave/protocol";
 import { useEffect, useMemo, useRef, useState, type DragEvent, type FormEvent } from "react";
 import { AbilityIcon } from "./AbilityIcon";
@@ -980,7 +981,9 @@ export function Hud() {
               </button>
               <div className="skill-tip" role="tooltip">
                 <div className="skill-tip-title">Potion</div>
-                <div className="skill-tip-body">Drink to restore HP. Keep a stack for emergencies.</div>
+                <div className="skill-tip-body">
+                  Drink to restore {getItem(ITEM.POTION)?.consume?.hp ?? 70} HP. Keep a stack for emergencies.
+                </div>
                 <div className="skill-tip-meta">Item · Key Q · ×{potions}</div>
               </div>
             </div>
