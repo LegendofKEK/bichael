@@ -81,6 +81,16 @@ import {
   paleHollowWalkable,
 } from "@bellgrave/config";
 import {
+  SHINY_CLONE_COUNT,
+  SHINY_FLEE_RELOCATE_MS,
+  applyShinyPromotion,
+  emptyShinyFields,
+  formationOffset,
+  lookupMobDef,
+  rollShinyMat,
+  rollShinyPromotion,
+} from "./shiny-hq-runtime";
+import {
   CATALOG_BY_SLUG,
   aggregateEquipmentStats,
   craftXpToNext,
@@ -345,6 +355,16 @@ type Mob = {
   roamUntil: number;
   /** Brief stand-still between hops/walks. */
   roamPauseUntil: number;
+  /** Shiny HQ — promoted on respawn (3%). Non-aggro until player pulls. */
+  shiny: boolean;
+  /** Ephemeral army clone — not a respawn slot; no chain-summon / no shiny loot. */
+  shinyClone: boolean;
+  /** Parent HQ id when this is a clone. */
+  hqId: string | null;
+  /** Living clone ids owned by a shiny HQ. */
+  cloneIds: string[];
+  /** HQ has already summoned its army (once per life). */
+  shinySummoned: boolean;
 };
 
 const PORT = Number(process.env.PORT ?? 8787);
@@ -437,12 +457,18 @@ function spawnFieldMob(
     archetype: string;
     job?: JobId | string;
     level?: number;
+    shiny?: boolean;
+    shinyClone?: boolean;
+    hqId?: string | null;
+    cloneIds?: string[];
+    shinySummoned?: boolean;
   },
 ): Mob {
   const level = Math.max(1, opts.level ?? 1);
   const job = resolveMobJob(opts.archetype, opts.job as JobId | undefined);
   const mpPool = mobMpForJob(job, level);
   const base = emptyCombatFields();
+  const shinyBits = emptyShinyFields();
   return {
     id,
     name,
@@ -473,6 +499,11 @@ function spawnFieldMob(
     // Stagger first wander so packs don't sync-step
     roamUntil: Date.now() + 400 + Math.floor(Math.random() * 1800),
     roamPauseUntil: 0,
+    shiny: opts.shiny ?? shinyBits.shiny,
+    shinyClone: opts.shinyClone ?? shinyBits.shinyClone,
+    hqId: opts.hqId ?? shinyBits.hqId,
+    cloneIds: opts.cloneIds ? [...opts.cloneIds] : [...shinyBits.cloneIds],
+    shinySummoned: opts.shinySummoned ?? shinyBits.shinySummoned,
   };
 }
 
@@ -490,6 +521,130 @@ function spawnSegmentAPack(): Mob[] {
     }),
   );
 }
+
+﻿/** Summon up to 4 non-shiny clones around the HQ (once per HQ life). */
+function ensureShinyArmy(hq: Mob, wallet: string | null, now: number) {
+  if (!hq.shiny || hq.shinyClone || hq.shinySummoned || !hq.alive) return;
+  hq.shinySummoned = true;
+  const pl = wallet ? players.get(wallet) : undefined;
+  const ids: string[] = [];
+  for (let i = 0; i < SHINY_CLONE_COUNT; i++) {
+    const off = formationOffset(hq.facing, i);
+    let x = hq.x + off.dx;
+    let z = hq.z + off.dz;
+    const placed = paleHollowPlaceOnDryLand(x, z);
+    x = placed.x;
+    z = placed.z;
+    const id = `${hq.id}-clone-${i}`;
+    const stale = mobs.findIndex((m) => m.id === id);
+    if (stale >= 0) mobs.splice(stale, 1);
+    const clone = spawnFieldMob(id, hq.name.replace(/^HQ /, "") + " Clone", x, z, hq.maxHp, {
+      aggro: "safe",
+      aggroRange: 0,
+      linkRange: 0,
+      drops: [],
+      rareDrops: [],
+      archetype: hq.archetype,
+      job: hq.job,
+      level: hq.level,
+      shiny: false,
+      shinyClone: true,
+      hqId: hq.id,
+      shinySummoned: true,
+    });
+    if (wallet) {
+      clone.targetId = wallet;
+      if (pl) clone.facing = facingTo(clone.x, clone.z, pl.x, pl.z);
+    }
+    mobs.push(clone);
+    ids.push(id);
+  }
+  hq.cloneIds = ids;
+  if (wallet) {
+    const p = players.get(wallet);
+    if (p) pushLog(p, `${hq.name} summons an army!`);
+  }
+}
+
+function despawnShinyClones(hq: Mob, now: number) {
+  for (const cid of hq.cloneIds) {
+    const clone = findMob(cid);
+    if (!clone) continue;
+    clone.alive = false;
+    clone.hp = 0;
+    clone.anim = "dead";
+    clone.deathAt = now;
+    clone.respawnAt = now;
+    clone.targetId = null;
+  }
+  hq.cloneIds = [];
+}
+
+/** After killing a player, shiny HQ relocates and clears the fight. */
+function shinyFleeAfterPlayerKill(hq: Mob, now: number) {
+  if (!hq.shiny || hq.shinyClone) return;
+  despawnShinyClones(hq, now);
+  hq.targetId = null;
+  hq.roamTx = Number.NaN;
+  hq.roamTz = Number.NaN;
+  let bestX = hq.spawnX;
+  let bestZ = hq.spawnZ;
+  for (let i = 0; i < 12; i++) {
+    const ang = Math.random() * Math.PI * 2;
+    const r = 18 + Math.random() * 28;
+    const tx = hq.x + Math.sin(ang) * r;
+    const tz = hq.z + Math.cos(ang) * r;
+    const dry = paleHollowPlaceOnDryLand(tx, tz);
+    if (paleHollowInBuildingClearing(dry.x, dry.z)) continue;
+    bestX = dry.x;
+    bestZ = dry.z;
+    break;
+  }
+  hq.spawnX = bestX;
+  hq.spawnZ = bestZ;
+  hq.facing = facingTo(hq.x, hq.z, bestX, bestZ);
+  hq.fleeUntil = now + SHINY_FLEE_RELOCATE_MS;
+  hq.anim = "walk";
+  const mid = paleHollowPlaceOnDryLand(
+    hq.x + (bestX - hq.x) * 0.45,
+    hq.z + (bestZ - hq.z) * 0.45,
+  );
+  hq.x = mid.x;
+  hq.z = mid.z;
+  syncUnitY(hq);
+}
+
+function respawnFieldMobFromDef(slotId: string, defName: string, spawnX: number, spawnZ: number): Mob {
+  const def = lookupMobDef(slotId);
+  const promote = !!def && rollShinyPromotion();
+  if (!def) {
+    return spawnFieldMob(slotId, defName, spawnX, spawnZ, 50, {
+      aggro: "proximity",
+      aggroRange: 4,
+      drops: [],
+      archetype: "pale_slime",
+      level: 1,
+    });
+  }
+  const mob = spawnFieldMob(def.id, def.name, spawnX, spawnZ, def.hp, {
+    aggro: def.aggro,
+    aggroRange: def.aggroRange,
+    linkRange: def.linkRange,
+    drops: def.drops,
+    rareDrops: def.rareDrops,
+    archetype: def.archetype,
+    job: def.job,
+    level: def.level,
+  });
+  mob.spawnX = spawnX;
+  mob.spawnZ = spawnZ;
+  mob.x = spawnX;
+  mob.z = spawnZ;
+  syncUnitY(mob);
+  if (promote) applyShinyPromotion(mob, def);
+  return mob;
+}
+
 
 function findMob(id: string | null | undefined): Mob | undefined {
   if (!id) return undefined;
@@ -521,6 +676,26 @@ function pullMobOn(mob: Mob, wallet: string, now: number) {
   mob.roamTz = Number.NaN;
   const pl = players.get(wallet);
   if (pl) mob.facing = facingTo(mob.x, mob.z, pl.x, pl.z);
+  // Shiny HQ summons its army on first player pull (engage / damage).
+  if (mob.shiny && !mob.shinyClone) ensureShinyArmy(mob, wallet, now);
+  // Link clone pack to the same fight (they stay aggro:safe for auto-pull).
+  if (mob.shiny && !mob.shinyClone) {
+    for (const cid of mob.cloneIds) {
+      const clone = findMob(cid);
+      if (!clone || !clone.alive) continue;
+      clone.targetId = wallet;
+      clone.roamTx = Number.NaN;
+      clone.roamTz = Number.NaN;
+      if (pl) clone.facing = facingTo(clone.x, clone.z, pl.x, pl.z);
+    }
+  } else if (mob.shinyClone && mob.hqId) {
+    const hq = findMob(mob.hqId);
+    if (hq && hq.alive && !hq.targetId) {
+      hq.targetId = wallet;
+      if (pl) hq.facing = facingTo(hq.x, hq.z, pl.x, pl.z);
+      ensureShinyArmy(hq, wallet, now);
+    }
+  }
   const link = mob.linkRange ?? 0;
   if (link <= 0) return;
   for (const ally of mobs) {
@@ -977,6 +1152,8 @@ function snapshotFor(p: Player): SnapshotMessage {
       buffs: mobBuffs(mob),
       archetype: mob.archetype,
       job: mob.job,
+      level: mob.level,
+      shiny: mob.shiny || undefined,
       deathAt: mob.alive ? undefined : mob.deathAt,
     });
   }
@@ -1459,6 +1636,18 @@ function rewardMobKill(p: Player, mob: Mob, now: number) {
         dropNotes.push(matDisplayName(rare.slug));
       }
     }
+  }
+  // Shiny HQ only — 10% for 1 high mat from the archetype table (clones never roll this).
+  if (mob.shiny && !mob.shinyClone) {
+    const shinyMat = rollShinyMat(mob.archetype);
+    if (shinyMat) {
+      grantBaseMat(p, shinyMat, 1);
+      dropNotes.push(matDisplayName(shinyMat));
+    }
+    despawnShinyClones(mob, now);
+  } else if (mob.shinyClone && mob.hqId) {
+    const hq = findMob(mob.hqId);
+    if (hq) hq.cloneIds = hq.cloneIds.filter((id) => id !== mob.id);
   }
   pushLog(
     p,
@@ -2246,7 +2435,11 @@ function playerSwing(p: Player, now: number) {
   }
   mob.hp -= dmg;
   if (now < mob.sleepUntil) mob.sleepUntil = 0;
-  if (mob.archetype === "dust_hare" && mob.hp > 0) {
+  // Hitting a shiny HQ/clone counts as a pull (summon + fight); they stay non-auto-aggro.
+  if ((mob.shiny || mob.shinyClone) && mob.hp > 0) {
+    pullMobOn(mob, p.wallet, now);
+  }
+  if (mob.archetype === "dust_hare" && !mob.shiny && !mob.shinyClone && mob.hp > 0) {
     mob.fleeUntil = now + 2800;
     mob.targetId = null;
     mob.roamTx = Number.NaN;
@@ -2282,7 +2475,12 @@ function playerSwing(p: Player, now: number) {
 
 function mobSwing(mob: Mob, now: number) {
   if (!mob.alive) return;
-  if (mob.aggro === "safe" || now < (mob.fleeUntil ?? 0)) return;
+  if (now < (mob.fleeUntil ?? 0)) return;
+  // Non-aggro field critters never auto-fight. Shiny HQ/clones are also aggro:safe
+  // (no auto-pull) but WILL fight after the player engages them (targetId set).
+  if (mob.aggro === "safe") {
+    if (!(mob.shiny || mob.shinyClone) || !mob.targetId) return;
+  }
   if (
     now < mob.stunUntil ||
     now < mob.petrifyUntil ||
@@ -2326,6 +2524,11 @@ function mobSwing(mob: Mob, now: number) {
   const d = dist(mob.x, mob.z, nearest.x, nearest.z);
   const engage = mobEngageRange(mob.job);
   if (d > engage) {
+    // Shiny clones march in formation with the HQ — don't freestyle-chase.
+    if (mob.shinyClone) {
+      if (now >= mob.animUntil) mob.anim = "walk";
+      return;
+    }
     if (now >= mob.animUntil) {
       const swingSlow = now < mob.slowUntil ? mob.swingPenalty : 0;
       const grav = now < mob.gravityUntil ? mob.gravityPct : 0;
@@ -2443,7 +2646,12 @@ function mobSwing(mob: Mob, now: number) {
       nearest.sacredLightUntil = now + 2200;
       pushLog(nearest, "Ember Vigil — you rise in sacred light!");
     } else {
+      const killer = mob;
       respawnAtHub(nearest);
+      if (killer.shiny && !killer.shinyClone) {
+        shinyFleeAfterPlayerKill(killer, now);
+        pushLog(nearest, killer.name + " flees into the Hollow...");
+      }
     }
   }
 }
@@ -2453,19 +2661,24 @@ function tickSim() {
   const now = Date.now();
   const dt = TICK_MS / 1000;
 
+  // Remove faded shiny clones (ephemeral — never respawn).
+  for (let i = mobs.length - 1; i >= 0; i--) {
+    const m = mobs[i]!;
+    if (m.shinyClone && !m.alive && m.deathAt && now >= m.deathAt + MOB_DEATH_FADE_MS) {
+      if (m.hqId) {
+        const hq = findMob(m.hqId);
+        if (hq) hq.cloneIds = hq.cloneIds.filter((id) => id !== m.id);
+      }
+      mobs.splice(i, 1);
+    }
+  }
+
   for (const mob of mobs) {
-    if (!mob.alive && now >= mob.respawnAt) {
+    if (!mob.alive && !mob.shinyClone && now >= mob.respawnAt) {
       const idx = mobs.indexOf(mob);
-      mobs[idx] = spawnFieldMob(mob.id, mob.name, mob.spawnX, mob.spawnZ, mob.maxHp, {
-        aggro: mob.aggro ?? "proximity",
-        aggroRange: mob.aggroRange ?? 4,
-        linkRange: mob.linkRange ?? 0,
-        drops: mob.drops ?? [],
-        rareDrops: mob.rareDrops ?? [],
-        archetype: mob.archetype ?? "pale_slime",
-        job: mob.job,
-        level: mob.level,
-      });
+      // Drop any leftover clones from a prior shiny life before resetting the slot.
+      if (mob.shiny) despawnShinyClones(mob, now);
+      mobs[idx] = respawnFieldMobFromDef(mob.id, mob.name, mob.spawnX, mob.spawnZ);
     }
     if (now >= mob.slowUntil) mob.swingPenalty = 0;
     if (now >= mob.gravityUntil) mob.gravityPct = 0;
@@ -2591,10 +2804,59 @@ function tickSim() {
       mob.anim = "walk";
       continue;
     }
+    // Shiny clones: hold formation on the HQ (little army) when the pack is out.
+    if (mob.shinyClone && mob.hqId) {
+      const hq = findMob(mob.hqId);
+      if (!hq || !hq.alive) {
+        // Orphaned clone — despawn next fade cycle.
+        mob.alive = false;
+        mob.hp = 0;
+        mob.anim = "dead";
+        mob.deathAt = now;
+        mob.respawnAt = now;
+        continue;
+      }
+      const living = hq.cloneIds.filter((id) => {
+        const c = findMob(id);
+        return !!(c && c.alive);
+      }).length;
+      const armyReady = living >= SHINY_CLONE_COUNT;
+      // Share the HQ's current fight target once pulled (still never auto-aggro).
+      if (hq.targetId && !mob.targetId) mob.targetId = hq.targetId;
+      if (armyReady || hq.targetId) {
+        const slot = Math.max(0, hq.cloneIds.indexOf(mob.id));
+        const off = formationOffset(hq.facing, slot);
+        const tx = hq.x + off.dx;
+        const tz = hq.z + off.dz;
+        const dForm = dist(mob.x, mob.z, tx, tz);
+        if (dForm > 0.35) {
+          const step = Math.min(dForm, 3.4 * dt);
+          const nx = mob.x + ((tx - mob.x) / dForm) * step;
+          const nz = mob.z + ((tz - mob.z) / dForm) * step;
+          const c = clampPlayerMove(mob.x, mob.z, nx, nz);
+          mob.x = c.x;
+          mob.z = c.z;
+          syncUnitY(mob);
+          mob.facing = facingTo(mob.x, mob.z, hq.x + Math.sin(hq.facing), hq.z + Math.cos(hq.facing));
+          mob.anim = "walk";
+        } else if (!mob.targetId) {
+          mob.anim = "idle";
+          mob.facing = hq.facing;
+        }
+        // When fighting, fall through to mobSwing via targetId; skip roam.
+        if (!mob.targetId) continue;
+        // Keep formation while chasing — don't run independent aggro roam.
+        continue;
+      }
+    }
+    // Shiny HQ stays passive (safe) until pulled — roam like hares, never auto-aggro.
     if (mob.aggro === "safe") {
-      mob.targetId = null;
-      tickMobRoam(mob, now, dt);
-      continue;
+      if (!(mob.shiny || mob.shinyClone) || !mob.targetId) {
+        mob.targetId = null;
+        tickMobRoam(mob, now, dt);
+        continue;
+      }
+      // Pulled shiny HQ: skip auto-aggro acquisition; chase handled in mobSwing.
     }
     if (!mob.targetId) {
       let nearest: Player | null = null;

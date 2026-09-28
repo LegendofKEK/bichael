@@ -1,4 +1,4 @@
-﻿import type { UnitSnapshot } from "@bellgrave/protocol";
+import type { UnitSnapshot } from "@bellgrave/protocol";
 import {
   MOB_DEATH_FADE_MS,
   PH_HUB,
@@ -549,6 +549,41 @@ function RemotePlayerBillboard({ unitId, unit }: { unitId: string; unit: UnitSna
  * Field mobs: sprite + bars + hop only. Avoids remounting the full Quicken/TD
  * tree on every HP tick and interpolates 20Hz flee snaps.
  */
+function ShinySparkles({ height }: { height: number }) {
+  const group = useRef<THREE.Group>(null);
+  useFrame(() => {
+    if (!group.current) return;
+    const t = performance.now() / 1000;
+    group.current.children.forEach((ch, i) => {
+      const a = t * (1.6 + i * 0.35) + i * 1.7;
+      const r = 0.35 + (i % 3) * 0.12;
+      ch.position.set(
+        Math.cos(a) * r,
+        height * (0.35 + 0.45 * ((Math.sin(a * 1.3) + 1) * 0.5)),
+        Math.sin(a) * r,
+      );
+      const mat = (ch as THREE.Mesh).material as THREE.MeshBasicMaterial;
+      if (mat) mat.opacity = 0.35 + 0.45 * ((Math.sin(a * 2) + 1) * 0.5);
+    });
+  });
+  return (
+    <group ref={group} renderOrder={6}>
+      {Array.from({ length: 6 }).map((_, i) => (
+        <mesh key={i} renderOrder={6}>
+          <sphereGeometry args={[0.045, 6, 6]} />
+          <meshBasicMaterial
+            color={i % 2 === 0 ? "#ffe29a" : "#fff6a8"}
+            transparent
+            opacity={0.7}
+            depthWrite={false}
+            toneMapped={false}
+          />
+        </mesh>
+      ))}
+    </group>
+  );
+}
+
 function MobBillboard({ unitId, unit }: { unitId: string; unit: UnitSnapshot }) {
   const root = useRef<THREE.Group>(null);
   const billboard = useRef<THREE.Group>(null);
@@ -693,6 +728,10 @@ function MobBillboard({ unitId, unit }: { unitId: string; unit: UnitSnapshot }) 
     } else if (u.buffs.scImpactUntil > Date.now()) {
       const pulse = 0.85 + Math.sin(performance.now() / 55) * 0.15;
       mat.current.color.setRGB(0.95 * pulse, 0.55 * pulse, 0.35 * pulse);
+    } else if (u.shiny) {
+      // HQ shiny: warm gold pulse on the same sprite.
+      const pulse = 0.88 + Math.sin(performance.now() / 280) * 0.12;
+      mat.current.color.setRGB(1.0 * pulse, 0.86 * pulse, 0.42 * pulse);
     } else {
       mat.current.color.set("#ffffff");
     }
@@ -744,6 +783,7 @@ function MobBillboard({ unitId, unit }: { unitId: string; unit: UnitSnapshot }) 
           side={THREE.DoubleSide}
         />
       </mesh>
+      {unit.shiny && <ShinySparkles height={spriteH0} />}
       <group ref={billboard}>
         <mesh ref={meshRef} position={[0, spriteH0 * 0.5, 0]} renderOrder={2}>
           <planeGeometry args={[1, 1]} />
@@ -774,8 +814,8 @@ function MobBillboard({ unitId, unit }: { unitId: string; unit: UnitSnapshot }) 
               <div
                 style={{
                   fontSize: 11,
-                  color: "#efe8dc",
-                  textShadow: "0 1px 3px #000, 0 0 6px #3a2a18",
+                  color: unit.shiny ? "#ffe29a" : "#efe8dc",
+                  textShadow: unit.shiny ? "0 1px 3px #000, 0 0 8px #c9a227" : "0 1px 3px #000, 0 0 6px #3a2a18",
                   whiteSpace: "nowrap",
                   fontFamily: "Cinzel, Georgia, serif",
                   textAlign: "center",
