@@ -4,7 +4,6 @@
 import {
   ROGUE_ABILITIES,
   isRogueAbilityId,
-  jobStatsAtLevel,
   physicalDamage,
   fStr,
   defenseFromVit,
@@ -20,7 +19,7 @@ export type RoguePlayer = {
   maxHp: number;
   tp: number;
   dust: number;
-  equip: { main: number | null; body: number | null };
+  equip: import("@bellgrave/items").Equipment;
   inventory: { tokenId: number; amount: number }[];
   anim: string;
   animUntil: number;
@@ -59,6 +58,14 @@ export type RogueHooks = {
   allMobs: () => RogueMob[];
   onMobKill: (p: RoguePlayer, m: RogueMob, now: number) => void;
   dist: (ax: number, az: number, bx: number, bz: number) => number;
+  playerCombatStats: (p: RoguePlayer) => {
+    str: number;
+    dex: number;
+    vit: number;
+    agi: number;
+    int: number;
+    mnd: number;
+  };
 };
 
 function invAmount(inv: RoguePlayer["inventory"], tokenId: number): number {
@@ -215,7 +222,7 @@ export function resolveRogueAbility(
     }
     spend();
     p.facing = hooks.facingTo(p.x, p.z, m.x, m.z);
-    const { str, dex } = jobStatsAtLevel("rogue", p.level);
+    const { str, dex } = hooks.playerCombatStats(p);
     const att = Math.max(1, Math.floor(str + dex * 0.4 + 10));
     const mobDef = defenseFromVit(GUARD_L1.vit);
     const dmg = physicalDamage(att, mobDef, fStr(str, GUARD_L1.vit), false);

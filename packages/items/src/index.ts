@@ -1,6 +1,7 @@
 export type {
   JobId,
   EquipSlot,
+  Equipment,
   CraftSkill,
   ItemKind,
   WeaponFamily,
@@ -8,7 +9,7 @@ export type {
   ConsumeEffect,
   ItemDef,
 } from "./types";
-export { hqStats, budgetPoints } from "./types";
+export { EQUIP_SLOTS, hqStats, budgetPoints } from "./types";
 export { CATALOG, CATALOG_BY_ID, CATALOG_BY_SLUG } from "./catalog.generated";
 export {
   CRAFT_SKILLS,
@@ -30,7 +31,7 @@ export {
 } from "./craft";
 
 import { CATALOG_BY_ID } from "./catalog.generated";
-import type { ItemDef } from "./types";
+import { EQUIP_SLOTS, type Equipment, type EquipSlot, type ItemDef, type ItemStats } from "./types";
 
 /** MVP legacy IDs — stable across catalog regen. */
 export const ITEM = {
@@ -59,4 +60,26 @@ export function itemIcon(id: number): string {
 
 export function itemDescription(id: number): string {
   return CATALOG_BY_ID[id]?.description ?? "";
+}
+
+/** Empty canonical equipment state for new players and save migration. */
+export function emptyEquipment(): Equipment {
+  return Object.fromEntries(EQUIP_SLOTS.map((slot) => [slot, null])) as Equipment;
+}
+
+/** Sum catalog stats for items equipped in their authored slots. */
+export function aggregateEquipmentStats(
+  equipment: Partial<Record<EquipSlot, number | null | undefined>>,
+): ItemStats {
+  const total: ItemStats = {};
+  for (const slot of EQUIP_SLOTS) {
+    const tokenId = equipment[slot];
+    if (tokenId == null) continue;
+    const def = getItem(tokenId);
+    if (!def || def.slot !== slot) continue;
+    for (const [key, value] of Object.entries(def.stats ?? {}) as [keyof ItemStats, number][]) {
+      total[key] = (total[key] ?? 0) + value;
+    }
+  }
+  return total;
 }

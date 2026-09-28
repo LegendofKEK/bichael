@@ -7,19 +7,22 @@ export type JobId =
   | "battlemage"
   | "tim";
 
-export type EquipSlot =
-  | "head"
-  | "body"
-  | "hands"
-  | "legs"
-  | "feet"
-  | "ring"
-  | "earring"
-  | "main"
-  | "sub"
-  | "grip"
-  | "ranged"
-  | "ammo";
+export const EQUIP_SLOTS = [
+  "head",
+  "body",
+  "hands",
+  "legs",
+  "feet",
+  "ring",
+  "earring",
+  "main",
+  "sub",
+  "grip",
+  "ranged",
+  "ammo",
+] as const;
+export type EquipSlot = (typeof EQUIP_SLOTS)[number];
+export type Equipment = Record<EquipSlot, number | null>;
 
 export type CraftSkill =
   | "smithing"

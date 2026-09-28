@@ -3,8 +3,6 @@
  */
 import {
   TIM_ABILITIES,
-  isJobId,
-  jobStatsAtLevel,
   type Stance,
   type TimAbilityId,
   isTimAbilityId,
@@ -23,7 +21,7 @@ export type TimPlayer = {
   tp: number;
   flux: boolean;
   aether: boolean;
-  equip: { main: number | null; body: number | null };
+  equip: import("@bellgrave/items").Equipment;
   inventory: { tokenId: number; amount: number }[];
   anim: string;
   animUntil: number;
@@ -94,17 +92,17 @@ function aetherAmp(p: TimPlayer): number {
   return p.aether ? 1.2 : 1;
 }
 
-function playerStats(p: TimPlayer) {
-  const job = isJobId(p.job) ? p.job : "time_mage";
-  return jobStatsAtLevel(job, p.level);
-}
-
 /**
  * Temporal Distortion — 2HR earth+time nuke.
  * Scales from job MND/INT; Frazzle amplifies per-target.
  */
-function temporalDistortionDamage(p: TimPlayer, target: TimMob, now: number): number {
-  const { mnd, int } = playerStats(p);
+function temporalDistortionDamage(
+  p: TimPlayer,
+  target: TimMob,
+  now: number,
+  stats: { mnd: number; int: number },
+): number {
+  const { mnd, int } = stats;
   let base = 80 + mnd * 6 + int * 2;
   if (now < target.frazzleUntil) base = Math.floor(base * 1.35);
   return Math.max(1, Math.floor(base * aetherAmp(p)));
@@ -116,8 +114,9 @@ function chronaShatter(
   m: TimMob,
   now: number,
   sealBonus: boolean,
+  stats: { mnd: number },
 ): { dmg: number; interruptMs: number } {
-  const { mnd } = playerStats(p);
+  const { mnd } = stats;
   let dmg = Math.floor((28 + mnd * 2.2) * aetherAmp(p));
   if (sealBonus) dmg = Math.floor(dmg * 1.2);
   const interruptMs = sealBonus ? 2800 : 2000;
@@ -148,6 +147,14 @@ function applySelfHaste(p: TimPlayer, now: number, pct: number, durationMs: numb
 export type AbilityHooks = {
   pushLog: (msg: string) => void;
   stopRest: (reason?: string) => void;
+  playerCombatStats: (p: TimPlayer) => {
+    str: number;
+    dex: number;
+    vit: number;
+    agi: number;
+    int: number;
+    mnd: number;
+  };
   facingTo: (fx: number, fz: number, tx: number, tz: number) => number;
   /** Called when an ability kills a mob. */
   onMobKill?: (mob: TimMob) => void;
@@ -279,10 +286,11 @@ export function resolveTimAbility(
   p.animUntil = now + 500;
 
   const sealBonus = now < p.timeSealUntil;
+  const combatStats = hooks.playerCombatStats(p);
 
   // Heals
   if (def.category === "heal" && def.heal) {
-    const { mnd } = playerStats(p);
+    const { mnd } = combatStats;
     const heal = Math.floor((def.heal + mnd * 1.5) * (p.aether ? 1.05 : 1));
     p.hp = Math.min(p.maxHp, p.hp + heal);
     hooks.pushLog(`${def.label} restores ${heal} HP.`);
@@ -378,7 +386,7 @@ export function resolveTimAbility(
       let killed = 0;
       let totalDmg = 0;
       for (const m of hits) {
-        const dmg = temporalDistortionDamage(p, m, now);
+        const dmg = temporalDistortionDamage(p, m, now, combatStats);
         totalDmg += dmg;
         m.hp = Math.max(0, m.hp - dmg);
         m.petrifyUntil = now + 60_000;
@@ -418,7 +426,7 @@ export function resolveTimAbility(
         let total = 0;
         let killed = 0;
         for (const m of hits) {
-          const { dmg } = chronaShatter(p, m, now, sealBonus);
+          const { dmg } = chronaShatter(p, m, now, sealBonus, combatStats);
           total += dmg;
           if (m.hp <= 0) {
             killed += 1;
@@ -467,7 +475,7 @@ export function resolveTimAbility(
     }
 
     if (id === "dispel") {
-      const { dmg, interruptMs } = chronaShatter(p, primary, now, sealBonus);
+      const { dmg, interruptMs } = chronaShatter(p, primary, now, sealBonus, combatStats);
       p.lastEnfeeble = id;
       if (sealBonus) p.timeSealUntil = 0;
       hooks.pushLog(`Dispel shatters chrona — ${dmg} damage, interrupt ${Math.round(interruptMs / 100) / 10}s.`);
