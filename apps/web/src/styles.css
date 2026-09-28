@@ -2927,3 +2927,60 @@ button.equip-stat-label:focus-visible {
     min-width: 110px;
   }
 }
+﻿
+/* —— Party panel —— */
+.party-panel {
+  position: absolute;
+  left: 12px;
+  top: 72px;
+  width: min(360px, calc(100vw - 24px));
+  max-height: min(70vh, 560px);
+  overflow: auto;
+  z-index: 40;
+  padding: 14px 14px 16px;
+  border-radius: 12px;
+  background: var(--cmd-panel-bg);
+  border: 1px solid var(--cmd-panel-edge);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+  color: var(--text);
+  font-family: var(--ui-font);
+}
+.party-panel-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.party-invite-banner { margin-bottom: 12px; padding: 10px 12px; }
+.party-invite-text { margin-bottom: 8px; color: var(--ash); }
+.party-invite-actions, .party-footer-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.party-solo, .party-invite-block { display: flex; flex-direction: column; gap: 8px; }
+.party-hint { margin: 0; font-size: 0.85rem; color: var(--text-dim); }
+.party-member-list, .party-nearby-list { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; }
+.party-member-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  width: 100%; text-align: left; padding: 8px 10px; border-radius: 8px;
+  border: 1px solid var(--cmd-row-edge); background: var(--cmd-row-bg);
+  color: var(--cmd-pill-text); cursor: pointer; font: inherit;
+}
+.party-member-row:hover { background: var(--cmd-row-bg-hot); }
+.party-member-row.static { cursor: default; }
+.party-member-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.party-member-name { font-weight: 600; color: var(--cmd-accent); }
+.party-member-meta { font-size: 0.78rem; color: var(--text-dim); text-transform: capitalize; }
+.party-hp-track { margin-top: 4px; height: 4px; border-radius: 2px; background: var(--cmd-track); overflow: hidden; }
+.party-hp-fill { height: 100%; background: var(--hp); }
+.party-kick-btn {
+  flex-shrink: 0; border: 1px solid var(--cmd-pill-rim); background: transparent;
+  color: var(--danger); border-radius: 6px; padding: 4px 8px; cursor: pointer;
+  font: inherit; font-size: 0.78rem;
+}
+.party-kick-btn:hover { filter: brightness(1.15); }
+.party-footer-actions { margin-top: 12px; }
+.party-invite-toast {
+  position: absolute; top: 16px; left: 50%; transform: translateX(-50%); z-index: 50;
+  display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-radius: 10px;
+  background: var(--cmd-card-bg); border: 1px solid var(--cmd-accent);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.4);
+}
