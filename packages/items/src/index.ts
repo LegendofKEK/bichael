@@ -18,11 +18,15 @@ export {
   emptyCraftSkills,
   getCraftableItem,
   ownedMatQty,
+  parseMaterialGroups,
   parseMaterialsText,
+  pickAffordableMaterials,
+  recipeMaterialGroups,
   recipeMaterials,
   type CloseCraftCandidate,
   type CraftSkillState,
   type RecipeMat,
+  type RecipeMatGroup,
 } from "./craft";
 
 import { CATALOG_BY_ID } from "./catalog.generated";

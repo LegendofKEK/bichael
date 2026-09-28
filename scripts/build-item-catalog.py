@@ -54,6 +54,12 @@ def budget(lv: int) -> int:
     return max(1, lv // 5 + 1)
 
 
+# Per-slug combat stat overrides (rare drops / hand-tuned gear). Applied after build_stats().
+STAT_OVERRIDES: dict[str, dict] = {
+    "chainmail": {"str": 5, "dex": 5, "agi": 5, "def": 10},
+}
+
+
 def parse_jobs(jobs: str) -> list[str] | str:
     j = (jobs or "").strip()
     if not j or j.lower().startswith("mat") or j.lower() in (
@@ -211,6 +217,18 @@ def weapon_family(name: str) -> str | None:
 
 
 def build_stats(name: str, kind: str, lv: int, slot: str | None, jobs: list[str] | str) -> dict:
+    """NQ combat stats from craft level budget B = floor(lv/5)+1.
+
+    Anchor: chainmail (STAT_OVERRIDES) — rare body at lv10 / B=3 with
+    {str:5, dex:5, agi:5, def:10} → combat power 25. Crafted NQ body combat
+    (def + role attrs, excl. hp/mp) tracks ~5*B:
+      B3/lv10 ≈ 15  (below the rare)
+      B5/lv20 ≈ 23  (catch up)
+      B11/lv50 ≈ 47
+      B21/lv100 ≈ 87
+    Other armor slots are fractions of body DEF; weapons scale offense with B
+    so DPS keeps pace. Rings / earrings / grips / ammo keep the prior modest curve.
+    """
     if kind in ("base", "intermediate", "filler"):
         return {}
     B = budget(max(1, lv))
@@ -251,60 +269,71 @@ def build_stats(name: str, kind: str, lv: int, slot: str | None, jobs: list[str]
 
     if slot == "main":
         if fam == "staff":
-            stats["mab"] = B + 3
-            stats["mnd"] = 1 + B // 3
+            stats["mab"] = math.floor(B * 2.2) + 3
+            stats["mnd"] = 1 + B // 2
         elif fam == "greatsword":
-            stats["atk"] = math.floor(B * 1.6) + 3
-            stats["str"] = 2 + B // 3
+            stats["atk"] = math.floor(B * 2.8) + 3
+            stats["str"] = 2 + B // 2
         elif fam == "dagger":
-            stats["atk"] = B + 1
-            stats["dex"] = 2 + B // 3
+            stats["atk"] = math.floor(B * 1.8) + 1
+            stats["dex"] = 2 + B // 2
         elif fam == "club":
-            stats["atk"] = B + 1
-            stats["mnd"] = 1 + B // 3
+            stats["atk"] = math.floor(B * 2.0) + 1
+            stats["mnd"] = 1 + B // 2
         elif fam == "axe":
-            stats["atk"] = B + 2
-            stats["str"] = 2 + B // 4
+            stats["atk"] = math.floor(B * 2.4) + 2
+            stats["str"] = 2 + B // 2
         elif fam == "knuckles":
-            stats["atk"] = B + 1
-            stats["str"] = 2 + B // 3
+            stats["atk"] = math.floor(B * 1.9) + 1
+            stats["str"] = 2 + B // 2
         else:
-            stats["atk"] = B + 2
-            stats["str"] = 1 + B // 4
+            stats["atk"] = math.floor(B * 2.2) + 2
+            stats["str"] = 1 + B // 2
             if mage:
-                stats["int"] = 1 + B // 5
+                stats["int"] = 1 + B // 3
     elif slot == "ranged":
-        stats["atk"] = B + 1
-        stats["agi"] = 1 + B // 3
+        stats["atk"] = math.floor(B * 2.0) + 1
+        stats["agi"] = 1 + B // 2
     elif slot == "ammo":
         stats["atk"] = max(1, B // 3)
     elif slot == "sub":
-        stats["def"] = B + 3
-        stats["vit"] = 1 + B // 4
+        # Shield ≈ 2/3 of heavy-body DEF band
+        stats["def"] = B * 2 + 2
+        stats["vit"] = max(1, B // 2)
     elif slot == "grip":
         stats["acc"] = B // 2 + 1 if not mage else 0
         if mage:
             stats["mab"] = B // 2 + 1
     elif slot == "body":
-        stats["def"] = B + 2
-        stats["hp"] = 5 + B
+        # Crafted body combat ≈ 5*B (see docstring); chainmail rare stays stronger at B=3.
         if heavy:
-            stats["vit"] = 1 + B // 3
+            stats["def"] = B * 3 + 2
+            stats["vit"] = B + 1
+            stats["hp"] = B * 4 + 5
         elif rogue:
-            stats["agi"] = 1 + B // 3
+            stats["def"] = B * 2 + 2
+            stats["agi"] = B * 2 + 1
+            stats["hp"] = B * 3 + 5
         elif mage:
-            stats["mp"] = 5 + B
-            stats["int"] = 1 + B // 3
+            stats["def"] = B * 2 + 1
+            stats["int"] = B * 2 + 1
+            stats["mp"] = B * 4 + 5
+            stats["hp"] = B * 2 + 5
+        else:
+            stats["def"] = B * 2 + 2
+            stats["vit"] = max(1, B // 2)
+            stats["hp"] = B * 3 + 5
     elif slot in ("head", "hands", "feet"):
-        stats["def"] = math.floor(B * 0.6) + 1
+        # ~1/3 of heavy-body DEF (3B+2)
+        stats["def"] = B + 1
     elif slot == "legs":
-        stats["def"] = math.floor(B * 0.8) + 1
+        # ~1/2 of heavy-body DEF
+        stats["def"] = math.floor(B * 1.5) + 1
     elif slot == "ring":
         stats["str"] = B // 2 + 1
     elif slot == "earring":
         stats["mnd"] = B // 2 + 1
     return stats
-
 
 def describe(name: str, kind: str, craft_skill: str | None, lv: int | None, obtained: str) -> str:
     if obtained and not obtained.lower().startswith("craft"):
@@ -465,6 +494,8 @@ def main() -> None:
         jobs = entry["jobs"]
         slot = infer_slot(name, kind) if kind == "equipment" else None
         stats = build_stats(name, kind, lv, slot, jobs)
+        if entry["slug"] in STAT_OVERRIDES:
+            stats = dict(STAT_OVERRIDES[entry["slug"]])
         # pull delay out of stats if old helper put it there — we don't
         delay = None
         if kind == "equipment" and slot == "main":
@@ -529,7 +560,7 @@ def main() -> None:
             "craftSkill": "smithing",
             "slot": "main",
             "jobRestrict": ["rogue"],
-            "stats": {"atk": 6, "dex": 3},
+            "stats": {"atk": 10, "dex": 4},
             "delayMs": 1800,
             "weaponFamily": "dagger",
             "recipe": {"kek": 1000, "materialsText": "Iron Ingot×1, Ash Dust×1"},
@@ -546,7 +577,7 @@ def main() -> None:
             "slot": "main",
             "twoHand": True,
             "jobRestrict": ["knight", "fighter"],
-            "stats": {"atk": 14, "str": 4},
+            "stats": {"atk": 22, "str": 5},
             "delayMs": 3800,
             "weaponFamily": "greatsword",
             "recipe": {"kek": 1000, "materialsText": "Iron Ingot×4, Ash Dust×1"},
@@ -562,8 +593,8 @@ def main() -> None:
             "craftSkill": "leathercraft",
             "slot": "body",
             "jobRestrict": ["rogue", "knight", "fighter"],
-            "stats": {"def": 10, "hp": 20, "agi": 2},
-            "recipe": {"kek": 1000, "materialsText": "Scale Leather×3, Bell Dust×1"},
+            "stats": {"def": 29, "vit": 10, "hp": 41},
+            "recipe": {"kek": 1000, "materialsText": "Stone Scale×3, Soft Pelt×1, Ash Dust×1"},
         },
     ]
     for stub in stubs:

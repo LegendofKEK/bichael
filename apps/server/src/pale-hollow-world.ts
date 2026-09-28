@@ -8,6 +8,7 @@ import {
   paleHollowNodeSpawnPoints,
   type PaleHollowMobDef,
   type PaleHollowNodeDef,
+  type PaleHollowRareDrop,
 } from "@bellgrave/config";
 
 export type FieldMob = {
@@ -27,6 +28,7 @@ export type FieldMob = {
   aggroRange: number;
   linkRange: number;
   drops: string[];
+  rareDrops: PaleHollowRareDrop[];
   targetId: string | null;
   alive: boolean;
   respawnAt: number;
@@ -57,6 +59,7 @@ function fromDef(d: PaleHollowMobDef): FieldMob {
     aggroRange: d.aggroRange,
     linkRange: d.linkRange ?? 0,
     drops: [...d.drops],
+    rareDrops: [...(d.rareDrops ?? [])],
     targetId: null,
     alive: true,
     respawnAt: 0,

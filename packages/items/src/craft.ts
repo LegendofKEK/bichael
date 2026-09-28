@@ -24,6 +24,8 @@ export const CRAFT_SKILL_LABEL: Record<CraftSkill, string> = {
 };
 
 export type RecipeMat = { slug: string; qty: number; name: string };
+/** One AND-slot; `options` are OR alternatives (first affordable wins at craft time). */
+export type RecipeMatGroup = { options: RecipeMat[] };
 
 /** Display name (lowercase, stripped pack counts) → slug. */
 const NAME_TO_SLUG: Map<string, string> = (() => {
@@ -46,35 +48,83 @@ function normalizeMatName(name: string): string {
     .replace(/×/g, "×");
 }
 
-/** Parse catalog `materialsText` like `Copper Ore×2, Tin Ore×1, Pale Dust×1`. */
-export function parseMaterialsText(text: string): RecipeMat[] {
+function parseOneMat(raw: string): RecipeMat | null {
+  const t = raw.trim();
+  if (!t) return null;
+  const m = /^(.+?)\s*[×x]\s*(\d+)\s*$/iu.exec(t);
+  const name = (m ? m[1]! : t).trim();
+  const qty = m ? Math.max(1, Number(m[2])) : 1;
+  const slug = NAME_TO_SLUG.get(normalizeMatName(name));
+  if (!slug) return null;
+  const def = CATALOG_BY_SLUG[slug];
+  return { slug, qty, name: def?.name ?? name };
+}
+
+/** Parse catalog `materialsText` like `Copper Ore×2, Tin Ore×1, Pale Dust×1`.
+ *  Supports OR alternatives per slot: `Shade Cotton×2 or Linen Scrap×3, Pale Dust×1`.
+ */
+export function parseMaterialGroups(text: string): RecipeMatGroup[] {
   if (!text?.trim()) return [];
-  const out: RecipeMat[] = [];
+  const groups: RecipeMatGroup[] = [];
   for (const part of text.split(/,/)) {
     const raw = part.trim();
     if (!raw) continue;
-    const m = /^(.+?)\s*[×x]\s*(\d+)\s*$/iu.exec(raw);
-    const name = (m ? m[1]! : raw).trim();
-    const qty = m ? Math.max(1, Number(m[2])) : 1;
-    const slug = NAME_TO_SLUG.get(normalizeMatName(name));
-    if (!slug) continue;
-    const def = CATALOG_BY_SLUG[slug];
-    out.push({ slug, qty, name: def?.name ?? name });
+    const options: RecipeMat[] = [];
+    for (const alt of raw.split(/\bor\b/i)) {
+      const mat = parseOneMat(alt);
+      if (mat) options.push(mat);
+    }
+    if (options.length) groups.push({ options });
   }
-  return out;
+  return groups;
 }
 
-export function recipeMaterials(def: ItemDef): RecipeMat[] {
+/** Parse catalog `materialsText` like `Copper Ore×2, Tin Ore×1, Pale Dust×1`. */
+export function parseMaterialsText(text: string): RecipeMat[] {
+  // Legacy flat view: first option of each OR group.
+  return parseMaterialGroups(text).map((g) => g.options[0]!);
+}
+
+export function recipeMaterialGroups(def: ItemDef): RecipeMatGroup[] {
   const structured = def.recipe?.materials;
   if (structured?.length) {
     return structured.map((m) => ({
-      slug: m.slug,
-      qty: m.qty,
-      name: CATALOG_BY_SLUG[m.slug]?.name ?? m.slug,
+      options: [
+        {
+          slug: m.slug,
+          qty: m.qty,
+          name: CATALOG_BY_SLUG[m.slug]?.name ?? m.slug,
+        },
+      ],
     }));
   }
-  if (def.recipe?.materialsText) return parseMaterialsText(def.recipe.materialsText);
+  if (def.recipe?.materialsText) return parseMaterialGroups(def.recipe.materialsText);
   return [];
+}
+
+export function recipeMaterials(def: ItemDef): RecipeMat[] {
+  return recipeMaterialGroups(def).map((g) => g.options[0]!);
+}
+
+/** Pick one affordable option per group, or null if any group is unaffordable. */
+export function pickAffordableMaterials(
+  def: ItemDef,
+  inventory: { tokenId: number; amount: number }[],
+  baseMats: Record<string, number>,
+): RecipeMat[] | null {
+  const picked: RecipeMat[] = [];
+  for (const group of recipeMaterialGroups(def)) {
+    let chosen: RecipeMat | null = null;
+    for (const opt of group.options) {
+      if (ownedMatQty(opt.slug, inventory, baseMats) >= opt.qty) {
+        chosen = opt;
+        break;
+      }
+    }
+    if (!chosen) return null;
+    picked.push(chosen);
+  }
+  return picked;
 }
 
 export type CraftSkillState = { level: number; xp: number };
@@ -129,8 +179,9 @@ export function closeCraftRecipes(
   for (const def of CATALOG) {
     if (!def.recipe || !def.craftSkill || def.craftLevel == null) continue;
     if (skillFilter !== "all" && def.craftSkill !== skillFilter) continue;
-    const materials = recipeMaterials(def);
-    if (materials.length === 0) continue;
+    const groups = recipeMaterialGroups(def);
+    if (groups.length === 0) continue;
+    const materials = groups.map((g) => g.options[0]!);
 
     const skillLevel = craftSkills[def.craftSkill]?.level ?? 1;
     const needLevel = def.craftLevel;
@@ -138,17 +189,21 @@ export function closeCraftRecipes(
     if (needLevel > skillLevel + 8) continue;
 
     let haveParts = 0;
-    for (const mat of materials) {
-      const have = ownedMatQty(mat.slug, inventory, baseMats);
-      haveParts += Math.min(1, have / mat.qty);
+    for (const group of groups) {
+      let best = 0;
+      for (const mat of group.options) {
+        const have = ownedMatQty(mat.slug, inventory, baseMats);
+        best = Math.max(best, Math.min(1, have / mat.qty));
+      }
+      haveParts += best;
     }
-    const matFrac = haveParts / materials.length;
+    const matFrac = haveParts / groups.length;
     // Skip recipes with zero materials owned (unless skill-ready and level 1–3 starter).
     if (matFrac <= 0 && !(skillLevel >= needLevel && needLevel <= 3)) continue;
 
     const levelOk = skillLevel >= needLevel;
     const levelProx = levelOk ? 1 : Math.max(0, 1 - (needLevel - skillLevel) / 8);
-    const canCraft = levelOk && matFrac >= 1;
+    const canCraft = levelOk && pickAffordableMaterials(def, inventory, baseMats) != null;
     const score = matFrac * 100 + levelProx * 35 + (canCraft ? 40 : 0) - Math.max(0, needLevel - skillLevel) * 2;
 
     scored.push({ def, materials, matFrac, skillLevel, needLevel, canCraft, score });
@@ -161,6 +216,6 @@ export function closeCraftRecipes(
 export function getCraftableItem(id: number): ItemDef | undefined {
   const def = CATALOG_BY_ID[id];
   if (!def?.recipe || !def.craftSkill || def.craftLevel == null) return undefined;
-  if (recipeMaterials(def).length === 0) return undefined;
+  if (recipeMaterialGroups(def).length === 0) return undefined;
   return def;
 }

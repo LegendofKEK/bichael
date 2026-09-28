@@ -139,6 +139,7 @@ export {
   type PaleHollowBiome,
   type PaleHollowNodeDef,
   type PaleHollowMobDef,
+  type PaleHollowRareDrop,
   type PaleHollowArchetype,
   type PaleHollowAggro,
   type PaleHollowSegmentId,

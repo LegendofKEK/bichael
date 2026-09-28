@@ -18,8 +18,8 @@ export const CATALOG: ItemDef[] = [
       "materialsText": "Ashbeam Lumber×2, Pale Dust×1"
     },
     "stats": {
-      "mab": 5,
-      "mnd": 1
+      "mab": 7,
+      "mnd": 2
     },
     "delayMs": 3600,
     "slot": "main",
@@ -45,10 +45,10 @@ export const CATALOG: ItemDef[] = [
       "materialsText": "Linen Cloth×3, Pale Dust×1"
     },
     "stats": {
-      "def": 5,
-      "hp": 8,
-      "mp": 8,
-      "int": 2
+      "def": 7,
+      "int": 7,
+      "mp": 17,
+      "hp": 11
     },
     "slot": "body",
     "jobRestrict": [
@@ -69,7 +69,7 @@ export const CATALOG: ItemDef[] = [
     "craftSkill": "alchemy",
     "recipe": {
       "kek": 1000,
-      "materialsText": "Distilled Ash×1, Dustgrain×1, Pale Dust×1"
+      "materialsText": "Distilled Pale×1, Dustgrain×1, Pale Dust×1"
     },
     "stats": {
       "hp": 70
@@ -92,8 +92,8 @@ export const CATALOG: ItemDef[] = [
       "materialsText": "Iron Ingot×2, Ashbeam Lumber×1, Ash Dust×1"
     },
     "stats": {
-      "atk": 7,
-      "str": 2,
+      "atk": 13,
+      "str": 3,
       "int": 2
     },
     "delayMs": 2400,
@@ -119,9 +119,9 @@ export const CATALOG: ItemDef[] = [
       "materialsText": "Iron Ingot×3, Ash Dust×1"
     },
     "stats": {
-      "def": 8,
-      "hp": 11,
-      "vit": 3
+      "def": 20,
+      "vit": 7,
+      "hp": 29
     },
     "slot": "body",
     "jobRestrict": [
@@ -143,8 +143,8 @@ export const CATALOG: ItemDef[] = [
       "rogue"
     ],
     "stats": {
-      "atk": 6,
-      "dex": 3
+      "atk": 10,
+      "dex": 4
     },
     "delayMs": 1800,
     "weaponFamily": "dagger",
@@ -167,9 +167,9 @@ export const CATALOG: ItemDef[] = [
       "materialsText": "Leather×3, Pale Dust×1"
     },
     "stats": {
-      "def": 5,
-      "hp": 8,
-      "agi": 2
+      "def": 8,
+      "agi": 7,
+      "hp": 14
     },
     "slot": "body",
     "jobRestrict": [
@@ -194,8 +194,8 @@ export const CATALOG: ItemDef[] = [
       "fighter"
     ],
     "stats": {
-      "atk": 14,
-      "str": 4
+      "atk": 22,
+      "str": 5
     },
     "delayMs": 3800,
     "weaponFamily": "greatsword",
@@ -207,27 +207,27 @@ export const CATALOG: ItemDef[] = [
   {
     "id": 9,
     "name": "Scale Harness",
-    "description": "Scale Harness. Light hide and scale for quiet steps through slag alleys.",
+    "description": "Scale Harness. Tempered gear from Bellgrave's craft halls.",
     "icon": "/icons/items/scale-harness.png",
     "slug": "scale-harness",
     "kind": "equipment",
     "craftLevel": 40,
     "craftSkill": "leathercraft",
-    "slot": "body",
-    "jobRestrict": [
-      "rogue",
-      "knight",
-      "fighter"
-    ],
-    "stats": {
-      "def": 10,
-      "hp": 20,
-      "agi": 2
-    },
     "recipe": {
       "kek": 1000,
-      "materialsText": "Scale Leather×3, Bell Dust×1"
-    }
+      "materialsText": "Stone Scale×3, Soft Pelt×1, Ash Dust×1"
+    },
+    "stats": {
+      "def": 29,
+      "vit": 10,
+      "hp": 41
+    },
+    "slot": "body",
+    "jobRestrict": [
+      "knight",
+      "fighter",
+      "rogue"
+    ]
   },
   {
     "id": 10,
@@ -324,7 +324,7 @@ export const CATALOG: ItemDef[] = [
     "craftSkill": "smithing",
     "recipe": {
       "kek": 1000,
-      "materialsText": "Steel Ingot×1, Ash Dust×1"
+      "materialsText": "Steel Ingot×1, Slag Dust×1"
     }
   },
   {
@@ -462,7 +462,7 @@ export const CATALOG: ItemDef[] = [
     "craftSkill": "woodworking",
     "recipe": {
       "kek": 1000,
-      "materialsText": "Bellwood Lumber×1, Darksteel Ingot×1, Bell Dust×1"
+      "materialsText": "Bellwood Lumber×1, Darksteel Ingot×1, Acid Bolt Compound×1, Bell Dust×1"
     },
     "stats": {
       "hp": 68
@@ -555,8 +555,8 @@ export const CATALOG: ItemDef[] = [
       "materialsText": "Ashbeam Lumber×2, Sulfur Bit×1, Ash Dust×1"
     },
     "stats": {
-      "mab": 10,
-      "mnd": 3
+      "mab": 18,
+      "mnd": 4
     },
     "delayMs": 3600,
     "slot": "main",
@@ -579,8 +579,8 @@ export const CATALOG: ItemDef[] = [
       "materialsText": "Ashbeam Lumber×2, Echo Extract×1, Ash Dust×1"
     },
     "stats": {
-      "mab": 10,
-      "mnd": 3
+      "mab": 18,
+      "mnd": 4
     },
     "delayMs": 3600,
     "slot": "main",
@@ -603,8 +603,8 @@ export const CATALOG: ItemDef[] = [
       "materialsText": "Bloodbeam Lumber×2, Lapis×1, Slag Dust×1"
     },
     "stats": {
-      "mab": 15,
-      "mnd": 5
+      "mab": 29,
+      "mnd": 7
     },
     "delayMs": 3600,
     "slot": "main",
@@ -627,8 +627,8 @@ export const CATALOG: ItemDef[] = [
       "materialsText": "Bloodbeam Lumber×2, Onyx×1, Slag Dust×1"
     },
     "stats": {
-      "mab": 15,
-      "mnd": 5
+      "mab": 29,
+      "mnd": 7
     },
     "delayMs": 3600,
     "slot": "main",
@@ -651,8 +651,8 @@ export const CATALOG: ItemDef[] = [
       "materialsText": "Bellwood Lumber×2, Glass Bead×1, Bell Dust×1"
     },
     "stats": {
-      "mab": 20,
-      "mnd": 6
+      "mab": 40,
+      "mnd": 9
     },
     "delayMs": 3600,
     "slot": "main",
@@ -676,8 +676,8 @@ export const CATALOG: ItemDef[] = [
       "materialsText": "Bellwood Lumber×2, Bat Wing×2, Bell Dust×1"
     },
     "stats": {
-      "mab": 20,
-      "mnd": 6
+      "mab": 40,
+      "mnd": 9
     },
     "delayMs": 3600,
     "slot": "main",
@@ -741,8 +741,8 @@ export const CATALOG: ItemDef[] = [
       "materialsText": "Ashbeam Lumber×2, Climbing Cord×1, Pale Dust×1"
     },
     "stats": {
-      "mab": 7,
-      "mnd": 2
+      "mab": 11,
+      "mnd": 3
     },
     "delayMs": 3600,
     "slot": "main",
@@ -762,8 +762,8 @@ export const CATALOG: ItemDef[] = [
       "materialsText": "Bloodbeam Lumber×2, Silk Thread×1, Slag Dust×1"
     },
     "stats": {
-      "mab": 13,
-      "mnd": 4
+      "mab": 25,
+      "mnd": 6
     },
     "delayMs": 3600,
     "slot": "main",
@@ -783,8 +783,8 @@ export const CATALOG: ItemDef[] = [
       "materialsText": "Bellwood Lumber×2, Mythril Chain×1, Bell Dust×1"
     },
     "stats": {
-      "mab": 19,
-      "mnd": 6
+      "mab": 38,
+      "mnd": 9
     },
     "delayMs": 3600,
     "slot": "main",
@@ -804,8 +804,8 @@ export const CATALOG: ItemDef[] = [
       "materialsText": "Relic Staff Blank×1, Diamond×1, Ornamented Plate Accent×1, Throne Dust×2"
     },
     "stats": {
-      "mab": 24,
-      "mnd": 8
+      "mab": 49,
+      "mnd": 11
     },
     "delayMs": 3600,
     "slot": "main",
@@ -931,16 +931,16 @@ export const CATALOG: ItemDef[] = [
   },
   {
     "id": 51,
-    "name": "Linen Thread×8",
-    "description": "Linen Thread×8 — synth material from Bellgrave crafts. Feed into higher recipes.",
+    "name": "Linen Thread",
+    "description": "Linen Thread — synth material from Bellgrave crafts. Feed into higher recipes.",
     "icon": "/icons/items/linen-thread.png",
     "slug": "linen-thread",
-    "kind": "filler",
-    "craftLevel": 20,
+    "kind": "intermediate",
+    "craftLevel": 1,
     "craftSkill": "clothcraft",
     "recipe": {
       "kek": 1000,
-      "materialsText": "Linen Cloth×1, Pale Dust×1"
+      "materialsText": "Pale Flax×2, Dead Fiber×1, Pale Dust×1"
     }
   },
   {
@@ -973,16 +973,16 @@ export const CATALOG: ItemDef[] = [
   },
   {
     "id": 54,
-    "name": "Ash Linen Thread×8",
-    "description": "Ash Linen Thread×8 — synth material from Bellgrave crafts. Feed into higher recipes.",
+    "name": "Shade Cotton Thread",
+    "description": "Shade Cotton Thread — synth material from Bellgrave crafts. Feed into higher recipes.",
     "icon": "/icons/items/ash-linen-thread.png",
     "slug": "ash-linen-thread",
-    "kind": "filler",
-    "craftLevel": 40,
+    "kind": "intermediate",
+    "craftLevel": 25,
     "craftSkill": "clothcraft",
     "recipe": {
       "kek": 1000,
-      "materialsText": "Linen Cloth×1, Ash Dust×1"
+      "materialsText": "Shade Cotton×2, Ash Dust×1"
     }
   },
   {
@@ -1001,30 +1001,30 @@ export const CATALOG: ItemDef[] = [
   },
   {
     "id": 56,
-    "name": "Silk Thread×8",
-    "description": "Silk Thread×8 — synth material from Bellgrave crafts. Feed into higher recipes.",
+    "name": "Spun Silk",
+    "description": "Spun Silk — synth material from Bellgrave crafts. Feed into higher recipes.",
     "icon": "/icons/items/silk-thread-2.png",
     "slug": "silk-thread-2",
-    "kind": "filler",
-    "craftLevel": 60,
+    "kind": "intermediate",
+    "craftLevel": 45,
     "craftSkill": "clothcraft",
     "recipe": {
       "kek": 1000,
-      "materialsText": "Silk Cloth×1, Slag Dust×1"
+      "materialsText": "Silk Thread×3, Slag Dust×1"
     }
   },
   {
     "id": 57,
-    "name": "Velvet Thread×8",
-    "description": "Velvet Thread×8 — synth material from Bellgrave crafts. Feed into higher recipes.",
+    "name": "Velvet Thread",
+    "description": "Velvet Thread — synth material from Bellgrave crafts. Feed into higher recipes.",
     "icon": "/icons/items/velvet-thread.png",
     "slug": "velvet-thread",
-    "kind": "filler",
-    "craftLevel": 80,
+    "kind": "intermediate",
+    "craftLevel": 60,
     "craftSkill": "clothcraft",
     "recipe": {
       "kek": 1000,
-      "materialsText": "Velvet Cloth×1, Bell Dust×1"
+      "materialsText": "Velvet Fiber×2 or Velvet Dust×3, Bell Dust×1"
     }
   },
   {
@@ -1055,9 +1055,9 @@ export const CATALOG: ItemDef[] = [
       "materialsText": "Linen Cloth×2, Spell Parchment×1, Ash Dust×1"
     },
     "stats": {
-      "atk": 9,
-      "str": 2,
-      "int": 2
+      "atk": 17,
+      "str": 4,
+      "int": 3
     },
     "delayMs": 2400,
     "slot": "main",
@@ -1081,9 +1081,9 @@ export const CATALOG: ItemDef[] = [
       "materialsText": "Velvet Cloth×2, Spell Parchment×2, Bell Dust×1"
     },
     "stats": {
-      "atk": 18,
-      "str": 5,
-      "int": 4
+      "atk": 37,
+      "str": 9,
+      "int": 6
     },
     "delayMs": 2400,
     "slot": "main",
@@ -1098,7 +1098,7 @@ export const CATALOG: ItemDef[] = [
     "description": "Bone Arrowhead×6 — synth material from Bellgrave crafts. Feed into higher recipes.",
     "icon": "/icons/items/bone-arrowhead.png",
     "slug": "bone-arrowhead",
-    "kind": "filler",
+    "kind": "intermediate",
     "craftLevel": 5,
     "craftSkill": "bonecraft",
     "recipe": {
@@ -1117,7 +1117,7 @@ export const CATALOG: ItemDef[] = [
     "craftSkill": "bonecraft",
     "recipe": {
       "kek": 1000,
-      "materialsText": "Bone Chip×1, Ashbeam Lumber×1, Pale Dust×1"
+      "materialsText": "Bone Arrowhead×1, Ashbeam Lumber×1, Pale Dust×1"
     },
     "stats": {
       "hp": 29
@@ -1462,7 +1462,7 @@ export const CATALOG: ItemDef[] = [
       "materialsText": "Bone Chip×2, Leather×1, Pale Dust×1"
     },
     "stats": {
-      "atk": 4,
+      "atk": 6,
       "dex": 3
     },
     "delayMs": 1800,
@@ -1486,8 +1486,8 @@ export const CATALOG: ItemDef[] = [
       "materialsText": "Giant Femur×1, Fine Leather×1, Slag Dust×1"
     },
     "stats": {
-      "atk": 13,
-      "dex": 6
+      "atk": 22,
+      "dex": 8
     },
     "delayMs": 1800,
     "slot": "main",
@@ -1675,7 +1675,7 @@ export const CATALOG: ItemDef[] = [
     "craftSkill": "smithing",
     "recipe": {
       "kek": 1000,
-      "materialsText": "Copper Ore×2, Tin Ore×1, Pale Dust×1"
+      "materialsText": "Copper Ore×2, Tin Ore×1 or Metal Scrap×5, Pale Dust×1"
     }
   },
   {
@@ -1706,8 +1706,8 @@ export const CATALOG: ItemDef[] = [
       "materialsText": "Bronze Ingot×2, Ashbeam Lumber×1, Pale Dust×1"
     },
     "stats": {
-      "atk": 4,
-      "str": 1,
+      "atk": 6,
+      "str": 2,
       "int": 1
     },
     "delayMs": 2400,
@@ -1733,8 +1733,8 @@ export const CATALOG: ItemDef[] = [
       "materialsText": "Bronze Ingot×2, Pale Dust×1"
     },
     "stats": {
-      "atk": 4,
-      "str": 2
+      "atk": 6,
+      "str": 3
     },
     "delayMs": 2600,
     "slot": "main",
@@ -1757,7 +1757,7 @@ export const CATALOG: ItemDef[] = [
       "materialsText": "Bronze Ingot×1, Pale Dust×1"
     },
     "stats": {
-      "def": 2
+      "def": 3
     },
     "slot": "head",
     "jobRestrict": [
@@ -1779,7 +1779,7 @@ export const CATALOG: ItemDef[] = [
       "materialsText": "Bronze Ingot×1, Pale Dust×1"
     },
     "stats": {
-      "def": 2
+      "def": 3
     },
     "slot": "hands",
     "jobRestrict": [
@@ -1801,9 +1801,9 @@ export const CATALOG: ItemDef[] = [
       "materialsText": "Bronze Ingot×3, Pale Dust×1"
     },
     "stats": {
-      "def": 5,
-      "hp": 8,
-      "vit": 2
+      "def": 11,
+      "vit": 4,
+      "hp": 17
     },
     "slot": "body",
     "jobRestrict": [
@@ -1825,7 +1825,7 @@ export const CATALOG: ItemDef[] = [
       "materialsText": "Bronze Ingot×2, Pale Dust×1"
     },
     "stats": {
-      "def": 3
+      "def": 5
     },
     "slot": "legs",
     "jobRestrict": [
@@ -1847,7 +1847,7 @@ export const CATALOG: ItemDef[] = [
       "materialsText": "Bronze Ingot×2, Pale Dust×1"
     },
     "stats": {
-      "def": 3
+      "def": 5
     },
     "slot": "legs",
     "jobRestrict": [
@@ -1866,10 +1866,10 @@ export const CATALOG: ItemDef[] = [
     "craftSkill": "smithing",
     "recipe": {
       "kek": 1000,
-      "materialsText": "Bronze Ingot×3, Pale Dust×1"
+      "materialsText": "Bronze Ingot×3, Cobble×2, Pale Dust×1"
     },
     "stats": {
-      "def": 6,
+      "def": 8,
       "vit": 1
     },
     "slot": "sub",
@@ -1935,8 +1935,8 @@ export const CATALOG: ItemDef[] = [
       "materialsText": "Iron Ingot×4, Ash Dust×1"
     },
     "stats": {
-      "atk": 7,
-      "str": 3
+      "atk": 14,
+      "str": 4
     },
     "delayMs": 2600,
     "slot": "main",
@@ -1960,7 +1960,7 @@ export const CATALOG: ItemDef[] = [
       "materialsText": "Iron Ingot×1, Ash Dust×1"
     },
     "stats": {
-      "def": 4
+      "def": 7
     },
     "slot": "head",
     "jobRestrict": [
@@ -1982,7 +1982,7 @@ export const CATALOG: ItemDef[] = [
       "materialsText": "Iron Ingot×1, Ash Dust×1"
     },
     "stats": {
-      "def": 4
+      "def": 7
     },
     "slot": "hands",
     "jobRestrict": [
@@ -2004,7 +2004,7 @@ export const CATALOG: ItemDef[] = [
       "materialsText": "Iron Ingot×2, Ash Dust×1"
     },
     "stats": {
-      "def": 5
+      "def": 10
     },
     "slot": "legs",
     "jobRestrict": [
@@ -2026,7 +2026,7 @@ export const CATALOG: ItemDef[] = [
       "materialsText": "Iron Ingot×2, Ash Dust×1"
     },
     "stats": {
-      "def": 6
+      "def": 11
     },
     "slot": "legs",
     "jobRestrict": [
@@ -2104,8 +2104,8 @@ export const CATALOG: ItemDef[] = [
       "materialsText": "Steel Ingot×4, Slag Dust×1"
     },
     "stats": {
-      "atk": 15,
-      "str": 4
+      "atk": 25,
+      "str": 6
     },
     "delayMs": 3800,
     "slot": "main",
@@ -2172,9 +2172,9 @@ export const CATALOG: ItemDef[] = [
       "materialsText": "Mythril Ingot×2, Bloodbeam Lumber×1, Slag Dust×1"
     },
     "stats": {
-      "atk": 12,
-      "str": 3,
-      "int": 3
+      "atk": 24,
+      "str": 6,
+      "int": 4
     },
     "delayMs": 2400,
     "slot": "main",
@@ -2199,7 +2199,7 @@ export const CATALOG: ItemDef[] = [
       "materialsText": "Mythril Ingot×1, Slag Dust×1"
     },
     "stats": {
-      "def": 7
+      "def": 11
     },
     "slot": "head",
     "jobRestrict": [
@@ -2220,7 +2220,7 @@ export const CATALOG: ItemDef[] = [
       "materialsText": "Mythril Ingot×1, Slag Dust×1"
     },
     "stats": {
-      "def": 7
+      "def": 11
     },
     "slot": "hands",
     "jobRestrict": [
@@ -2241,9 +2241,9 @@ export const CATALOG: ItemDef[] = [
       "materialsText": "Mythril Ingot×3, Slag Dust×1"
     },
     "stats": {
-      "def": 13,
-      "hp": 16,
-      "vit": 4
+      "def": 35,
+      "vit": 12,
+      "hp": 49
     },
     "slot": "body",
     "jobRestrict": [
@@ -2264,7 +2264,7 @@ export const CATALOG: ItemDef[] = [
       "materialsText": "Mythril Ingot×2, Slag Dust×1"
     },
     "stats": {
-      "def": 9
+      "def": 17
     },
     "slot": "legs",
     "jobRestrict": [
@@ -2285,7 +2285,7 @@ export const CATALOG: ItemDef[] = [
       "materialsText": "Mythril Ingot×2, Slag Dust×1"
     },
     "stats": {
-      "def": 7
+      "def": 12
     },
     "slot": "feet",
     "jobRestrict": [
@@ -2306,8 +2306,8 @@ export const CATALOG: ItemDef[] = [
       "materialsText": "Mythril Ingot×3, Slag Dust×1"
     },
     "stats": {
-      "def": 14,
-      "vit": 3
+      "def": 24,
+      "vit": 5
     },
     "slot": "sub",
     "jobRestrict": [
@@ -2342,8 +2342,8 @@ export const CATALOG: ItemDef[] = [
       "materialsText": "Mythril Ingot×4, Slag Dust×1"
     },
     "stats": {
-      "atk": 22,
-      "str": 6
+      "atk": 36,
+      "str": 8
     },
     "delayMs": 3800,
     "slot": "main",
@@ -2389,16 +2389,16 @@ export const CATALOG: ItemDef[] = [
     "icon": "/icons/items/darksteel-blade.png",
     "slug": "darksteel-blade",
     "kind": "equipment",
-    "craftLevel": 64,
+    "craftLevel": 65,
     "craftSkill": "smithing",
     "recipe": {
       "kek": 1000,
       "materialsText": "Darksteel Ingot×2, Bellwood Lumber×1, Bell Dust×1"
     },
     "stats": {
-      "atk": 15,
-      "str": 4,
-      "int": 3
+      "atk": 32,
+      "str": 8,
+      "int": 5
     },
     "delayMs": 2400,
     "slot": "main",
@@ -2423,8 +2423,8 @@ export const CATALOG: ItemDef[] = [
       "materialsText": "Darksteel Ingot×4, Bell Dust×1"
     },
     "stats": {
-      "atk": 16,
-      "str": 5
+      "atk": 35,
+      "str": 9
     },
     "delayMs": 2600,
     "slot": "main",
@@ -2448,7 +2448,7 @@ export const CATALOG: ItemDef[] = [
       "materialsText": "Darksteel Ingot×1, Bell Dust×1"
     },
     "stats": {
-      "def": 9
+      "def": 15
     },
     "slot": "head",
     "jobRestrict": [
@@ -2470,7 +2470,7 @@ export const CATALOG: ItemDef[] = [
       "materialsText": "Darksteel Ingot×1, Bell Dust×1"
     },
     "stats": {
-      "def": 9
+      "def": 15
     },
     "slot": "hands",
     "jobRestrict": [
@@ -2492,9 +2492,9 @@ export const CATALOG: ItemDef[] = [
       "materialsText": "Darksteel Ingot×3, Bell Dust×1"
     },
     "stats": {
-      "def": 17,
-      "hp": 20,
-      "vit": 6
+      "def": 47,
+      "vit": 16,
+      "hp": 65
     },
     "slot": "body",
     "jobRestrict": [
@@ -2516,7 +2516,7 @@ export const CATALOG: ItemDef[] = [
       "materialsText": "Darksteel Ingot×2, Bell Dust×1"
     },
     "stats": {
-      "def": 13
+      "def": 23
     },
     "slot": "legs",
     "jobRestrict": [
@@ -2538,7 +2538,7 @@ export const CATALOG: ItemDef[] = [
       "materialsText": "Darksteel Ingot×2, Bell Dust×1"
     },
     "stats": {
-      "def": 10
+      "def": 16
     },
     "slot": "feet",
     "jobRestrict": [
@@ -2560,8 +2560,8 @@ export const CATALOG: ItemDef[] = [
       "materialsText": "Darksteel Ingot×3, Bell Dust×1"
     },
     "stats": {
-      "def": 18,
-      "vit": 4
+      "def": 32,
+      "vit": 7
     },
     "slot": "sub",
     "jobRestrict": [
@@ -2666,9 +2666,9 @@ export const CATALOG: ItemDef[] = [
       "materialsText": "Orichalcum Ingot×2, Bellwood Lumber×1, Throne Dust×1"
     },
     "stats": {
-      "atk": 20,
-      "str": 5,
-      "int": 4
+      "atk": 41,
+      "str": 10,
+      "int": 7
     },
     "delayMs": 2400,
     "slot": "main",
@@ -2706,7 +2706,7 @@ export const CATALOG: ItemDef[] = [
       "materialsText": "Orichalcum Ingot×1, Marble Chip×1, Throne Dust×1"
     },
     "stats": {
-      "def": 12
+      "def": 20
     },
     "slot": "head",
     "jobRestrict": [
@@ -2727,7 +2727,7 @@ export const CATALOG: ItemDef[] = [
       "materialsText": "Orichalcum Ingot×1, Marble Chip×1, Throne Dust×1"
     },
     "stats": {
-      "def": 12
+      "def": 20
     },
     "slot": "hands",
     "jobRestrict": [
@@ -2745,12 +2745,12 @@ export const CATALOG: ItemDef[] = [
     "craftSkill": "smithing",
     "recipe": {
       "kek": 1000,
-      "materialsText": "Orichalcum Ingot×3, Marble Chip×2, Orichalcum Goldsmith Wire×2, Regalia Filigree×1, Throne Dust×1"
+      "materialsText": "Orichalcum Ingot×3, Marble Chip×2, Darksteel Goldsmith Wire×2, Goldsmith Filigree×1, Throne Dust×1"
     },
     "stats": {
-      "def": 21,
-      "hp": 24,
-      "vit": 7
+      "def": 59,
+      "vit": 20,
+      "hp": 81
     },
     "slot": "body",
     "jobRestrict": [
@@ -2771,7 +2771,7 @@ export const CATALOG: ItemDef[] = [
       "materialsText": "Orichalcum Ingot×2, Marble Chip×1, Throne Dust×1"
     },
     "stats": {
-      "def": 17
+      "def": 31
     },
     "slot": "legs",
     "jobRestrict": [
@@ -2792,7 +2792,7 @@ export const CATALOG: ItemDef[] = [
       "materialsText": "Orichalcum Ingot×2, Marble Chip×1, Throne Dust×1"
     },
     "stats": {
-      "def": 13
+      "def": 21
     },
     "slot": "feet",
     "jobRestrict": [
@@ -2813,8 +2813,8 @@ export const CATALOG: ItemDef[] = [
       "materialsText": "Orichalcum Ingot×3, Column Fragment×1, Throne Dust×1"
     },
     "stats": {
-      "atk": 22,
-      "str": 7
+      "atk": 50,
+      "str": 12
     },
     "delayMs": 2600,
     "slot": "main",
@@ -2849,7 +2849,7 @@ export const CATALOG: ItemDef[] = [
     "craftSkill": "woodworking",
     "recipe": {
       "kek": 1000,
-      "materialsText": "Ashbeam Log×2, Pale Dust×1"
+      "materialsText": "Ashbeam Log×2, Bark Strip×1, Pale Dust×1"
     }
   },
   {
@@ -2877,7 +2877,7 @@ export const CATALOG: ItemDef[] = [
     "craftSkill": "woodworking",
     "recipe": {
       "kek": 1000,
-      "materialsText": "Ashbeam Lumber×2, Pale Dust×1"
+      "materialsText": "Ashbeam Lumber×2, Cracked Brick×1, Pale Dust×1"
     },
     "stats": {
       "def": 4,
@@ -2966,11 +2966,11 @@ export const CATALOG: ItemDef[] = [
     "icon": "/icons/items/ashbeam-siege-stock.png",
     "slug": "ashbeam-siege-stock",
     "kind": "filler",
-    "craftLevel": 18,
+    "craftLevel": 20,
     "craftSkill": "woodworking",
     "recipe": {
       "kek": 1000,
-      "materialsText": "Ashbeam Lumber×1, Pale Dust×1"
+      "materialsText": "Ashbeam Lumber×1, Iron Arrowhead×1, Ash Dust×1"
     }
   },
   {
@@ -3029,8 +3029,8 @@ export const CATALOG: ItemDef[] = [
       "materialsText": "Ashbeam Lumber×1, Bone Chip×1, Ash Dust×1"
     },
     "stats": {
-      "mab": 9,
-      "mnd": 3
+      "mab": 16,
+      "mnd": 4
     },
     "delayMs": 3600,
     "slot": "main",
@@ -3149,7 +3149,7 @@ export const CATALOG: ItemDef[] = [
     "craftSkill": "woodworking",
     "recipe": {
       "kek": 1000,
-      "materialsText": "Bloodbeam Log×2, Soft Pelt×1, Slag Dust×1"
+      "materialsText": "Bloodbeam Log×2, Bark Strip×1, Slag Dust×1"
     }
   },
   {
@@ -3194,8 +3194,8 @@ export const CATALOG: ItemDef[] = [
       "materialsText": "Bloodbeam Lumber×1, Iron Ingot×1, Slag Dust×1"
     },
     "stats": {
-      "atk": 11,
-      "mnd": 4
+      "atk": 21,
+      "mnd": 6
     },
     "delayMs": 2400,
     "slot": "main",
@@ -3246,8 +3246,8 @@ export const CATALOG: ItemDef[] = [
       "materialsText": "Bloodbeam Lumber×2, Silk Thread×1, Slag Dust×1"
     },
     "stats": {
-      "atk": 12,
-      "agi": 4
+      "atk": 23,
+      "agi": 6
     },
     "slot": "ranged"
   },
@@ -3332,7 +3332,7 @@ export const CATALOG: ItemDef[] = [
     "craftSkill": "woodworking",
     "recipe": {
       "kek": 1000,
-      "materialsText": "Bellwood Log×2, Bell Dust×1"
+      "materialsText": "Bellwood Log×2, Bark Strip×1, Bell Dust×1"
     }
   },
   {
@@ -3377,8 +3377,8 @@ export const CATALOG: ItemDef[] = [
       "materialsText": "Bellwood Lumber×2, Silk Thread×1, Bell Dust×1"
     },
     "stats": {
-      "mab": 18,
-      "mnd": 6
+      "mab": 36,
+      "mnd": 8
     },
     "delayMs": 3600,
     "slot": "main",
@@ -3519,8 +3519,8 @@ export const CATALOG: ItemDef[] = [
       "materialsText": "Bellwood Lumber×2, Horn×1, Throne Dust×1"
     },
     "stats": {
-      "atk": 20,
-      "agi": 7
+      "atk": 39,
+      "agi": 10
     },
     "slot": "ranged"
   },
@@ -3552,8 +3552,8 @@ export const CATALOG: ItemDef[] = [
       "materialsText": "Bellwood Lumber×2, Bellwood Ferrule×1, Bellwood Laminate×1, Orichalcum Ingot×1, Throne Dust×1"
     },
     "stats": {
-      "mab": 23,
-      "mnd": 7
+      "mab": 47,
+      "mnd": 11
     },
     "delayMs": 3600,
     "slot": "main",
@@ -3577,8 +3577,8 @@ export const CATALOG: ItemDef[] = [
       "materialsText": "Bellwood Lumber×2, Diamond×1, Throne Dust×1"
     },
     "stats": {
-      "mab": 23,
-      "mnd": 7
+      "mab": 47,
+      "mnd": 11
     },
     "delayMs": 3600,
     "slot": "main",
@@ -3599,7 +3599,7 @@ export const CATALOG: ItemDef[] = [
     "craftSkill": "woodworking",
     "recipe": {
       "kek": 1000,
-      "materialsText": "Bellwood Lumber×3, Orichalcum Ingot×1, Throne Dust×2"
+      "materialsText": "Bellwood Lumber×2 or Petrified Lumber×2, Ancient Branch×1, Orichalcum Ingot×1, Throne Dust×2"
     }
   },
   {
@@ -3644,7 +3644,7 @@ export const CATALOG: ItemDef[] = [
       "materialsText": "Leather×1, Pale Dust×1"
     },
     "stats": {
-      "def": 1
+      "def": 2
     },
     "slot": "head",
     "jobRestrict": [
@@ -3667,7 +3667,7 @@ export const CATALOG: ItemDef[] = [
       "materialsText": "Leather×1, Pale Dust×1"
     },
     "stats": {
-      "def": 2
+      "def": 3
     },
     "slot": "hands",
     "jobRestrict": [
@@ -3690,7 +3690,7 @@ export const CATALOG: ItemDef[] = [
       "materialsText": "Leather×1, Pale Dust×1"
     },
     "stats": {
-      "def": 2
+      "def": 3
     },
     "slot": "feet",
     "jobRestrict": [
@@ -3713,7 +3713,7 @@ export const CATALOG: ItemDef[] = [
       "materialsText": "Leather×2, Pale Dust×1"
     },
     "stats": {
-      "def": 2
+      "def": 4
     },
     "slot": "legs",
     "jobRestrict": [
@@ -3824,7 +3824,7 @@ export const CATALOG: ItemDef[] = [
       "materialsText": "Leather×2, Silk Thread×1, Ash Dust×1"
     },
     "stats": {
-      "def": 4
+      "def": 6
     },
     "slot": "head",
     "jobRestrict": [
@@ -3845,7 +3845,7 @@ export const CATALOG: ItemDef[] = [
       "materialsText": "Leather×2, Silk Thread×1, Ash Dust×1"
     },
     "stats": {
-      "def": 4
+      "def": 6
     },
     "slot": "hands",
     "jobRestrict": [
@@ -3866,7 +3866,7 @@ export const CATALOG: ItemDef[] = [
       "materialsText": "Leather×2, Silk Thread×1, Ash Dust×1"
     },
     "stats": {
-      "def": 5
+      "def": 10
     },
     "slot": "legs",
     "jobRestrict": [
@@ -3887,7 +3887,7 @@ export const CATALOG: ItemDef[] = [
       "materialsText": "Leather×2, Silk Thread×1, Ash Dust×1"
     },
     "stats": {
-      "def": 4
+      "def": 7
     },
     "slot": "feet",
     "jobRestrict": [
@@ -3908,9 +3908,9 @@ export const CATALOG: ItemDef[] = [
       "materialsText": "Leather×3, Silk Thread×1, Ash Dust×1"
     },
     "stats": {
-      "def": 9,
-      "hp": 12,
-      "agi": 3
+      "def": 16,
+      "agi": 15,
+      "hp": 26
     },
     "slot": "body",
     "jobRestrict": [
@@ -3928,12 +3928,12 @@ export const CATALOG: ItemDef[] = [
     "craftSkill": "leathercraft",
     "recipe": {
       "kek": 1000,
-      "materialsText": "Soft Pelt×1, Climbing Cord×1, Ash Dust×1"
+      "materialsText": "Leather×1, Climbing Cord×1, Ash Dust×1"
     },
     "stats": {
-      "def": 9,
-      "hp": 12,
-      "agi": 3
+      "def": 16,
+      "agi": 15,
+      "hp": 26
     },
     "slot": "body",
     "jobRestrict": [
@@ -4025,7 +4025,7 @@ export const CATALOG: ItemDef[] = [
       "materialsText": "Fine Leather×1, Bone Chip×1, Slag Dust×1"
     },
     "stats": {
-      "def": 7
+      "def": 11
     },
     "slot": "head"
   },
@@ -4057,7 +4057,7 @@ export const CATALOG: ItemDef[] = [
       "materialsText": "Fine Leather×1, Slag Dust×1"
     },
     "stats": {
-      "def": 7
+      "def": 11
     },
     "slot": "head",
     "jobRestrict": [
@@ -4079,9 +4079,9 @@ export const CATALOG: ItemDef[] = [
       "materialsText": "Fine Leather×3, Slag Dust×1"
     },
     "stats": {
-      "def": 13,
-      "hp": 16,
-      "vit": 4
+      "def": 35,
+      "vit": 12,
+      "hp": 49
     },
     "slot": "body",
     "jobRestrict": [
@@ -4103,7 +4103,7 @@ export const CATALOG: ItemDef[] = [
       "materialsText": "Fine Leather×1, Slag Dust×1"
     },
     "stats": {
-      "def": 7
+      "def": 12
     },
     "slot": "hands",
     "jobRestrict": [
@@ -4125,7 +4125,7 @@ export const CATALOG: ItemDef[] = [
       "materialsText": "Fine Leather×2, Slag Dust×1"
     },
     "stats": {
-      "def": 9
+      "def": 17
     },
     "slot": "legs",
     "jobRestrict": [
@@ -4147,7 +4147,7 @@ export const CATALOG: ItemDef[] = [
       "materialsText": "Fine Leather×2, Slag Dust×1"
     },
     "stats": {
-      "def": 8
+      "def": 13
     },
     "slot": "feet",
     "jobRestrict": [
@@ -4253,7 +4253,7 @@ export const CATALOG: ItemDef[] = [
       "materialsText": "Scale Leather×1, Bell Dust×1"
     },
     "stats": {
-      "def": 10
+      "def": 16
     },
     "slot": "head",
     "jobRestrict": [
@@ -4275,7 +4275,7 @@ export const CATALOG: ItemDef[] = [
       "materialsText": "Scale Leather×1, Bell Dust×1"
     },
     "stats": {
-      "def": 10
+      "def": 16
     },
     "slot": "hands",
     "jobRestrict": [
@@ -4297,9 +4297,9 @@ export const CATALOG: ItemDef[] = [
       "materialsText": "Scale Leather×3, Bell Dust×1"
     },
     "stats": {
-      "def": 17,
-      "hp": 20,
-      "vit": 6
+      "def": 47,
+      "vit": 16,
+      "hp": 65
     },
     "slot": "body",
     "jobRestrict": [
@@ -4321,7 +4321,7 @@ export const CATALOG: ItemDef[] = [
       "materialsText": "Scale Leather×2, Bell Dust×1"
     },
     "stats": {
-      "def": 13
+      "def": 25
     },
     "slot": "legs",
     "jobRestrict": [
@@ -4343,7 +4343,7 @@ export const CATALOG: ItemDef[] = [
       "materialsText": "Scale Leather×2, Bell Dust×1"
     },
     "stats": {
-      "def": 10
+      "def": 17
     },
     "slot": "feet",
     "jobRestrict": [
@@ -4477,9 +4477,9 @@ export const CATALOG: ItemDef[] = [
       "materialsText": "Scale Leather×3, Jadeite×1, Scale Leather Belt×1, Scale Leather Stud Kit×1, Throne Dust×1"
     },
     "stats": {
-      "def": 22,
-      "hp": 25,
-      "agi": 7
+      "def": 42,
+      "agi": 41,
+      "hp": 65
     },
     "slot": "body",
     "jobRestrict": [
@@ -4539,7 +4539,7 @@ export const CATALOG: ItemDef[] = [
     "craftSkill": "clothcraft",
     "recipe": {
       "kek": 1000,
-      "materialsText": "Shade Cotton×2 or Linen Scrap×3, Pale Dust×1"
+      "materialsText": "Linen Thread×3 or Linen Scrap×4, Pale Dust×1"
     }
   },
   {
@@ -4570,7 +4570,7 @@ export const CATALOG: ItemDef[] = [
       "materialsText": "Linen Cloth×1, Pale Dust×1"
     },
     "stats": {
-      "def": 1
+      "def": 2
     },
     "slot": "head",
     "jobRestrict": [
@@ -4594,7 +4594,7 @@ export const CATALOG: ItemDef[] = [
       "materialsText": "Linen Cloth×1, Pale Dust×1"
     },
     "stats": {
-      "def": 2
+      "def": 3
     },
     "slot": "hands",
     "jobRestrict": [
@@ -4618,7 +4618,7 @@ export const CATALOG: ItemDef[] = [
       "materialsText": "Linen Cloth×1, Pale Dust×1"
     },
     "stats": {
-      "def": 2
+      "def": 3
     },
     "slot": "feet",
     "jobRestrict": [
@@ -4642,7 +4642,7 @@ export const CATALOG: ItemDef[] = [
       "materialsText": "Linen Cloth×2, Pale Dust×1"
     },
     "stats": {
-      "def": 2
+      "def": 4
     },
     "slot": "legs",
     "jobRestrict": [
@@ -4775,10 +4775,10 @@ export const CATALOG: ItemDef[] = [
     "craftSkill": "clothcraft",
     "recipe": {
       "kek": 1000,
-      "materialsText": "Linen Cloth×1, Dead Fiber×1, Ash Dust×1"
+      "materialsText": "Linen Cloth×1, Shade Cotton×1, Ash Dust×1"
     },
     "stats": {
-      "def": 4
+      "def": 7
     },
     "slot": "head",
     "jobRestrict": [
@@ -4799,13 +4799,13 @@ export const CATALOG: ItemDef[] = [
     "craftSkill": "clothcraft",
     "recipe": {
       "kek": 1000,
-      "materialsText": "Linen Cloth×3, Dead Fiber×1, Ash Dust×1"
+      "materialsText": "Linen Cloth×3, Shade Cotton Thread×1, Ash Dust×1"
     },
     "stats": {
-      "def": 9,
-      "hp": 12,
-      "mp": 12,
-      "int": 3
+      "def": 15,
+      "int": 15,
+      "mp": 33,
+      "hp": 19
     },
     "slot": "body",
     "jobRestrict": [
@@ -4826,10 +4826,10 @@ export const CATALOG: ItemDef[] = [
     "craftSkill": "clothcraft",
     "recipe": {
       "kek": 1000,
-      "materialsText": "Linen Cloth×1, Dead Fiber×1, Ash Dust×1"
+      "materialsText": "Linen Cloth×1, Shade Cotton×1, Ash Dust×1"
     },
     "stats": {
-      "def": 5
+      "def": 8
     },
     "slot": "hands",
     "jobRestrict": [
@@ -4850,10 +4850,10 @@ export const CATALOG: ItemDef[] = [
     "craftSkill": "clothcraft",
     "recipe": {
       "kek": 1000,
-      "materialsText": "Linen Cloth×2, Dead Fiber×1, Ash Dust×1"
+      "materialsText": "Linen Cloth×2, Shade Cotton×1, Ash Dust×1"
     },
     "stats": {
-      "def": 6
+      "def": 11
     },
     "slot": "legs",
     "jobRestrict": [
@@ -4874,10 +4874,10 @@ export const CATALOG: ItemDef[] = [
     "craftSkill": "clothcraft",
     "recipe": {
       "kek": 1000,
-      "materialsText": "Linen Cloth×1, Dead Fiber×1, Ash Dust×1"
+      "materialsText": "Linen Cloth×1, Shade Cotton×1, Ash Dust×1"
     },
     "stats": {
-      "def": 5
+      "def": 9
     },
     "slot": "feet",
     "jobRestrict": [
@@ -4912,7 +4912,7 @@ export const CATALOG: ItemDef[] = [
     "craftSkill": "clothcraft",
     "recipe": {
       "kek": 1000,
-      "materialsText": "Silk Thread×3, Slag Dust×1"
+      "materialsText": "Spun Silk×1, Slag Dust×1"
     }
   },
   {
@@ -4943,7 +4943,7 @@ export const CATALOG: ItemDef[] = [
       "materialsText": "Silk Cloth×1, Slag Dust×1"
     },
     "stats": {
-      "def": 7
+      "def": 11
     },
     "slot": "head",
     "jobRestrict": [
@@ -4967,10 +4967,10 @@ export const CATALOG: ItemDef[] = [
       "materialsText": "Silk Cloth×3, Slag Dust×1"
     },
     "stats": {
-      "def": 13,
-      "hp": 16,
-      "mp": 16,
-      "int": 4
+      "def": 23,
+      "int": 23,
+      "mp": 49,
+      "hp": 27
     },
     "slot": "body",
     "jobRestrict": [
@@ -4994,7 +4994,7 @@ export const CATALOG: ItemDef[] = [
       "materialsText": "Silk Cloth×1, Slag Dust×1"
     },
     "stats": {
-      "def": 7
+      "def": 12
     },
     "slot": "hands",
     "jobRestrict": [
@@ -5018,7 +5018,7 @@ export const CATALOG: ItemDef[] = [
       "materialsText": "Silk Cloth×2, Slag Dust×1"
     },
     "stats": {
-      "def": 9
+      "def": 17
     },
     "slot": "legs",
     "jobRestrict": [
@@ -5042,7 +5042,7 @@ export const CATALOG: ItemDef[] = [
       "materialsText": "Silk Cloth×1, Slag Dust×1"
     },
     "stats": {
-      "def": 8
+      "def": 13
     },
     "slot": "feet",
     "jobRestrict": [
@@ -5119,7 +5119,7 @@ export const CATALOG: ItemDef[] = [
     "craftSkill": "clothcraft",
     "recipe": {
       "kek": 1000,
-      "materialsText": "Velvet Dust×2, Silk Cloth×1, Bell Dust×1"
+      "materialsText": "Velvet Thread×3, Silk Cloth×1, Bell Dust×1"
     }
   },
   {
@@ -5164,7 +5164,7 @@ export const CATALOG: ItemDef[] = [
       "materialsText": "Velvet Cloth×1, Bell Dust×1"
     },
     "stats": {
-      "def": 10
+      "def": 16
     },
     "slot": "head",
     "jobRestrict": [
@@ -5186,10 +5186,10 @@ export const CATALOG: ItemDef[] = [
       "materialsText": "Velvet Cloth×3, Bell Dust×1"
     },
     "stats": {
-      "def": 17,
-      "hp": 20,
-      "mp": 20,
-      "int": 6
+      "def": 31,
+      "int": 31,
+      "mp": 65,
+      "hp": 35
     },
     "slot": "body",
     "jobRestrict": [
@@ -5211,7 +5211,7 @@ export const CATALOG: ItemDef[] = [
       "materialsText": "Velvet Cloth×1, Bell Dust×1"
     },
     "stats": {
-      "def": 10
+      "def": 16
     },
     "slot": "hands",
     "jobRestrict": [
@@ -5233,7 +5233,7 @@ export const CATALOG: ItemDef[] = [
       "materialsText": "Velvet Cloth×2, Bell Dust×1"
     },
     "stats": {
-      "def": 13
+      "def": 25
     },
     "slot": "legs",
     "jobRestrict": [
@@ -5255,7 +5255,7 @@ export const CATALOG: ItemDef[] = [
       "materialsText": "Velvet Cloth×1, Bell Dust×1"
     },
     "stats": {
-      "def": 10
+      "def": 17
     },
     "slot": "feet",
     "jobRestrict": [
@@ -5274,10 +5274,10 @@ export const CATALOG: ItemDef[] = [
     "craftSkill": "goldsmithing",
     "recipe": {
       "kek": 1000,
-      "materialsText": "Orichalcum Ingot×1, Bell Dust×1"
+      "materialsText": "Mythril Ingot×1, Fine Leather×1, Bell Dust×1"
     },
     "stats": {
-      "def": 10
+      "def": 17
     },
     "slot": "head"
   },
@@ -5323,8 +5323,8 @@ export const CATALOG: ItemDef[] = [
       "materialsText": "Copper Ore×2, Leather×1, Ash Dust×1"
     },
     "stats": {
-      "atk": 7,
-      "str": 2
+      "atk": 13,
+      "str": 3
     },
     "delayMs": 2400,
     "slot": "main",
@@ -5372,10 +5372,10 @@ export const CATALOG: ItemDef[] = [
       "materialsText": "Velvet Cloth×2, Jadeite×1, Throne Dust×1"
     },
     "stats": {
-      "def": 21,
-      "hp": 24,
-      "mp": 24,
-      "int": 7
+      "def": 39,
+      "int": 39,
+      "mp": 81,
+      "hp": 43
     },
     "slot": "body",
     "jobRestrict": [
@@ -5410,10 +5410,10 @@ export const CATALOG: ItemDef[] = [
       "materialsText": "Velvet Cloth×3, Diamond×1, Throne Dust×1"
     },
     "stats": {
-      "def": 22,
-      "hp": 25,
-      "mp": 25,
-      "int": 7
+      "def": 41,
+      "int": 41,
+      "mp": 85,
+      "hp": 45
     },
     "slot": "body",
     "jobRestrict": [
@@ -5513,7 +5513,7 @@ export const CATALOG: ItemDef[] = [
       "materialsText": "Mythril Ingot×1, Fine Leather×1, Slag Dust×1"
     },
     "stats": {
-      "def": 7
+      "def": 11
     },
     "slot": "head",
     "jobRestrict": "all"
@@ -5546,8 +5546,8 @@ export const CATALOG: ItemDef[] = [
       "materialsText": "Giant Femur×1, Pale Dust×1"
     },
     "stats": {
-      "atk": 3,
-      "dex": 2
+      "atk": 4,
+      "dex": 3
     },
     "delayMs": 1800,
     "slot": "main",
@@ -5584,7 +5584,7 @@ export const CATALOG: ItemDef[] = [
       "materialsText": "Orichalcum Ingot×1, Diamond×1, Throne Dust×1"
     },
     "stats": {
-      "def": 12
+      "def": 20
     },
     "slot": "head",
     "jobRestrict": [
@@ -5720,9 +5720,9 @@ export const CATALOG: ItemDef[] = [
       "materialsText": "Giant Femur×1, Desiccated Hide×1, Ash Dust×1"
     },
     "stats": {
-      "def": 8,
-      "hp": 11,
-      "vit": 3
+      "def": 20,
+      "vit": 7,
+      "hp": 29
     },
     "slot": "body",
     "jobRestrict": [
@@ -5744,7 +5744,7 @@ export const CATALOG: ItemDef[] = [
       "materialsText": "Skull Plate×1, Soft Pelt×1, Ash Dust×1"
     },
     "stats": {
-      "def": 5
+      "def": 8
     },
     "slot": "head",
     "jobRestrict": [
@@ -5780,7 +5780,7 @@ export const CATALOG: ItemDef[] = [
       "materialsText": "Giant Femur×1, Soft Pelt×1, Slag Dust×1"
     },
     "stats": {
-      "def": 7
+      "def": 13
     },
     "slot": "legs",
     "jobRestrict": [
@@ -5866,8 +5866,8 @@ export const CATALOG: ItemDef[] = [
       "materialsText": "Stone Scale×4, Slag Dust×1"
     },
     "stats": {
-      "def": 13,
-      "vit": 3
+      "def": 22,
+      "vit": 5
     },
     "slot": "sub"
   },
@@ -5903,7 +5903,7 @@ export const CATALOG: ItemDef[] = [
       "materialsText": "Skull Plate×1, Soft Pelt×1, Slag Dust×1"
     },
     "stats": {
-      "def": 8
+      "def": 13
     },
     "slot": "head",
     "jobRestrict": [
@@ -6066,7 +6066,7 @@ export const CATALOG: ItemDef[] = [
     "craftSkill": "goldsmithing",
     "recipe": {
       "kek": 1000,
-      "materialsText": "Distilled Ash×1, Pale Dust×1"
+      "materialsText": "River Sand×2, Potter's Clay×1 or Limestone×3, Pale Dust×1"
     }
   },
   {
@@ -6168,7 +6168,7 @@ export const CATALOG: ItemDef[] = [
     "craftSkill": "goldsmithing",
     "recipe": {
       "kek": 1000,
-      "materialsText": "Copper Ore×1, Pale Dust×1"
+      "materialsText": "Copper Ore×1 or Tile Shard×2, Pale Dust×1"
     }
   },
   {
@@ -6185,7 +6185,7 @@ export const CATALOG: ItemDef[] = [
       "materialsText": "Bronze Ingot×1, Glass Bead×1, Copper Goldsmith Cabochon×1, Ash Dust×1"
     },
     "stats": {
-      "def": 3
+      "def": 5
     },
     "slot": "head"
   },
@@ -6524,7 +6524,7 @@ export const CATALOG: ItemDef[] = [
     "craftSkill": "goldsmithing",
     "recipe": {
       "kek": 1000,
-      "materialsText": "Orichalcum Ingot×1, Bell Dust×1"
+      "materialsText": "Mythril Ingot×1, Bell Dust×1"
     },
     "stats": {
       "str": 8
@@ -6608,11 +6608,11 @@ export const CATALOG: ItemDef[] = [
     "icon": "/icons/items/distilled-ash.png",
     "slug": "distilled-ash",
     "kind": "intermediate",
-    "craftLevel": 1,
+    "craftLevel": 20,
     "craftSkill": "alchemy",
     "recipe": {
       "kek": 1000,
-      "materialsText": "Ash Dust×2"
+      "materialsText": "Ash Dust×2, Antidote Root×1"
     }
   },
   {
@@ -6646,7 +6646,7 @@ export const CATALOG: ItemDef[] = [
     "craftSkill": "alchemy",
     "recipe": {
       "kek": 1000,
-      "materialsText": "Distilled Ash×1, Pale Dust×1"
+      "materialsText": "Distilled Pale×1, Pale Dust×1"
     },
     "stats": {
       "hp": 26
@@ -6666,7 +6666,7 @@ export const CATALOG: ItemDef[] = [
     "craftSkill": "alchemy",
     "recipe": {
       "kek": 1000,
-      "materialsText": "Distilled Ash×1, Pale Dust×1"
+      "materialsText": "Distilled Pale×1, Pale Dust×1"
     },
     "stats": {
       "hp": 92,
@@ -6688,7 +6688,7 @@ export const CATALOG: ItemDef[] = [
     "craftSkill": "alchemy",
     "recipe": {
       "kek": 1000,
-      "materialsText": "Distilled Ash×1, Pale Dust×1"
+      "materialsText": "Distilled Pale×1, Pale Dust×1"
     },
     "stats": {
       "hp": 98,
@@ -6730,7 +6730,7 @@ export const CATALOG: ItemDef[] = [
     "craftSkill": "alchemy",
     "recipe": {
       "kek": 1000,
-      "materialsText": "Distilled Ash×1, Pale Dust×1"
+      "materialsText": "Distilled Pale×1, Pale Dust×1"
     },
     "stats": {
       "hp": 98,
@@ -6752,7 +6752,7 @@ export const CATALOG: ItemDef[] = [
     "craftSkill": "alchemy",
     "recipe": {
       "kek": 1000,
-      "materialsText": "Distilled Ash×1, Pale Dust×1"
+      "materialsText": "Distilled Pale×1, Pale Dust×1"
     }
   },
   {
@@ -6762,17 +6762,17 @@ export const CATALOG: ItemDef[] = [
     "icon": "/icons/items/ether.png",
     "slug": "ether",
     "kind": "consumable",
-    "craftLevel": 18,
+    "craftLevel": 20,
     "craftSkill": "alchemy",
     "recipe": {
       "kek": 1000,
       "materialsText": "Distilled Ash×1, Ink Salt×1, Ash Dust×1"
     },
     "stats": {
-      "mp": 72
+      "mp": 80
     },
     "consume": {
-      "mp": 72
+      "mp": 80
     }
   },
   {
@@ -6964,7 +6964,7 @@ export const CATALOG: ItemDef[] = [
     "craftSkill": "alchemy",
     "recipe": {
       "kek": 1000,
-      "materialsText": "Distilled Ash×1, Glass Bead×1, Slag Dust×1"
+      "materialsText": "Distilled Ash×1, Glass Bead×1, Insect Wing×1, Slag Dust×1"
     },
     "stats": {
       "hp": 44
@@ -7392,7 +7392,7 @@ export const CATALOG: ItemDef[] = [
     "craftSkill": "cooking",
     "recipe": {
       "kek": 1000,
-      "materialsText": "Dustgrain×1, Pale Dust×1"
+      "materialsText": "Rock Salt×1, Dustgrain×1, Pale Dust×1"
     }
   },
   {
@@ -7427,7 +7427,7 @@ export const CATALOG: ItemDef[] = [
     "craftSkill": "cooking",
     "recipe": {
       "kek": 1000,
-      "materialsText": "Dustgrain×1, Pale Dust×1"
+      "materialsText": "Fossil Minnow×2, Dustgrain×1, Pale Dust×1"
     }
   },
   {
@@ -7459,7 +7459,7 @@ export const CATALOG: ItemDef[] = [
     "craftSkill": "cooking",
     "recipe": {
       "kek": 1000,
-      "materialsText": "Dustgrain×1, Pale Dust×1"
+      "materialsText": "Clay Crab×1, Dustgrain×2, Pale Dust×1"
     }
   },
   {
@@ -7473,7 +7473,7 @@ export const CATALOG: ItemDef[] = [
     "craftSkill": "cooking",
     "recipe": {
       "kek": 1000,
-      "materialsText": "Dustgrain×1, Pale Dust×1"
+      "materialsText": "Dustgrain×2, Rock Salt×1, Pale Dust×1"
     }
   },
   {
@@ -7487,7 +7487,7 @@ export const CATALOG: ItemDef[] = [
     "craftSkill": "cooking",
     "recipe": {
       "kek": 1000,
-      "materialsText": "Dustgrain×1, Pale Dust×1"
+      "materialsText": "Dustgrain×2, Pale Dust×1"
     }
   },
   {
@@ -7501,7 +7501,7 @@ export const CATALOG: ItemDef[] = [
     "craftSkill": "cooking",
     "recipe": {
       "kek": 1000,
-      "materialsText": "Dustgrain×1, Pale Dust×1"
+      "materialsText": "Echo Carp×1, Rock Salt×1, Pale Dust×1"
     }
   },
   {
@@ -7515,7 +7515,7 @@ export const CATALOG: ItemDef[] = [
     "craftSkill": "cooking",
     "recipe": {
       "kek": 1000,
-      "materialsText": "Dustgrain×1, Pale Dust×1"
+      "materialsText": "Fossil Minnow×1, Clay Crab×1, Dustgrain×1, Pale Dust×1"
     }
   },
   {
@@ -7550,7 +7550,7 @@ export const CATALOG: ItemDef[] = [
     "craftSkill": "cooking",
     "recipe": {
       "kek": 1000,
-      "materialsText": "Dustgrain×1, Ash Dust×1"
+      "materialsText": "Antidote Root×1, Dustgrain×1, Ash Dust×1"
     }
   },
   {
@@ -7564,7 +7564,7 @@ export const CATALOG: ItemDef[] = [
     "craftSkill": "cooking",
     "recipe": {
       "kek": 1000,
-      "materialsText": "Dustgrain×1, Ash Dust×1"
+      "materialsText": "Bone Chip×1, Dustgrain×1, Ash Dust×1"
     }
   },
   {
@@ -7599,7 +7599,7 @@ export const CATALOG: ItemDef[] = [
     "craftSkill": "cooking",
     "recipe": {
       "kek": 1000,
-      "materialsText": "Dustgrain×1, Ash Dust×1"
+      "materialsText": "Dustgrain×2, Rock Salt×1, Ash Dust×1"
     }
   },
   {
@@ -7613,7 +7613,7 @@ export const CATALOG: ItemDef[] = [
     "craftSkill": "cooking",
     "recipe": {
       "kek": 1000,
-      "materialsText": "Dustgrain×1, Ash Dust×1"
+      "materialsText": "Bone Chip×2, Dustgrain×1, Ash Dust×1"
     }
   },
   {
@@ -7627,7 +7627,7 @@ export const CATALOG: ItemDef[] = [
     "craftSkill": "cooking",
     "recipe": {
       "kek": 1000,
-      "materialsText": "Dustgrain×1, Ash Dust×1"
+      "materialsText": "Dried Ration Scrap×1, Dustgrain×1, Ash Dust×1"
     }
   },
   {
@@ -7641,7 +7641,7 @@ export const CATALOG: ItemDef[] = [
     "craftSkill": "cooking",
     "recipe": {
       "kek": 1000,
-      "materialsText": "Dustgrain×1, Ash Dust×1"
+      "materialsText": "Bone Chip×1, Fossil Minnow×1, Ash Dust×1"
     }
   },
   {
@@ -7655,7 +7655,7 @@ export const CATALOG: ItemDef[] = [
     "craftSkill": "cooking",
     "recipe": {
       "kek": 1000,
-      "materialsText": "Dustgrain×1, Ash Dust×1"
+      "materialsText": "Glass Bead×1, Dustgrain×1, Ash Dust×1"
     }
   },
   {
@@ -7669,7 +7669,7 @@ export const CATALOG: ItemDef[] = [
     "craftSkill": "cooking",
     "recipe": {
       "kek": 1000,
-      "materialsText": "Dustgrain×1, Ash Dust×1"
+      "materialsText": "Clay Crab×1, Fossil Minnow×1, Dustgrain×1, Ash Dust×1"
     }
   },
   {
@@ -7683,7 +7683,7 @@ export const CATALOG: ItemDef[] = [
     "craftSkill": "cooking",
     "recipe": {
       "kek": 1000,
-      "materialsText": "Dustgrain×1, Ash Dust×1"
+      "materialsText": "Fossil Minnow×2, Rock Salt×1, Ash Dust×1"
     }
   },
   {
@@ -7718,7 +7718,7 @@ export const CATALOG: ItemDef[] = [
     "craftSkill": "cooking",
     "recipe": {
       "kek": 1000,
-      "materialsText": "Dustgrain×1, Slag Dust×1"
+      "materialsText": "Dustgrain×2, Rock Salt×1, Slag Dust×1"
     }
   },
   {
@@ -7732,7 +7732,7 @@ export const CATALOG: ItemDef[] = [
     "craftSkill": "cooking",
     "recipe": {
       "kek": 1000,
-      "materialsText": "Dustgrain×1, Slag Dust×1"
+      "materialsText": "Fossil Minnow×1, Dustgrain×1, Slag Dust×1"
     }
   },
   {
@@ -7767,7 +7767,7 @@ export const CATALOG: ItemDef[] = [
     "craftSkill": "cooking",
     "recipe": {
       "kek": 1000,
-      "materialsText": "Dustgrain×1, Slag Dust×1"
+      "materialsText": "Fossil Minnow×2, Dustgrain×1, Slag Dust×1"
     }
   },
   {
@@ -7802,7 +7802,7 @@ export const CATALOG: ItemDef[] = [
     "craftSkill": "cooking",
     "recipe": {
       "kek": 1000,
-      "materialsText": "Dustgrain×1, Slag Dust×1"
+      "materialsText": "Clay Crab×1, Dustgrain×2, Slag Dust×1"
     }
   },
   {
@@ -7816,7 +7816,7 @@ export const CATALOG: ItemDef[] = [
     "craftSkill": "cooking",
     "recipe": {
       "kek": 1000,
-      "materialsText": "Dustgrain×1, Slag Dust×1"
+      "materialsText": "Dustgrain×2, Rock Salt×1, Slag Dust×1"
     }
   },
   {
@@ -7830,7 +7830,7 @@ export const CATALOG: ItemDef[] = [
     "craftSkill": "cooking",
     "recipe": {
       "kek": 1000,
-      "materialsText": "Dustgrain×1, Slag Dust×1"
+      "materialsText": "Dustgrain×2, Slag Dust×1"
     }
   },
   {
@@ -7844,7 +7844,7 @@ export const CATALOG: ItemDef[] = [
     "craftSkill": "cooking",
     "recipe": {
       "kek": 1000,
-      "materialsText": "Dustgrain×1, Slag Dust×1"
+      "materialsText": "Echo Carp×1, Rock Salt×1, Slag Dust×1"
     }
   },
   {
@@ -7858,7 +7858,7 @@ export const CATALOG: ItemDef[] = [
     "craftSkill": "cooking",
     "recipe": {
       "kek": 1000,
-      "materialsText": "Dustgrain×1, Slag Dust×1"
+      "materialsText": "Fossil Minnow×1, Clay Crab×1, Dustgrain×1, Slag Dust×1"
     }
   },
   {
@@ -7872,7 +7872,7 @@ export const CATALOG: ItemDef[] = [
     "craftSkill": "cooking",
     "recipe": {
       "kek": 1000,
-      "materialsText": "Dustgrain×1, Slag Dust×1"
+      "materialsText": "Glass Eel×1, Bitter Spice×1, Slag Dust×1"
     },
     "stats": {
       "hp": 59
@@ -7892,7 +7892,7 @@ export const CATALOG: ItemDef[] = [
     "craftSkill": "cooking",
     "recipe": {
       "kek": 1000,
-      "materialsText": "Dustgrain×1, Bell Dust×1"
+      "materialsText": "Antidote Root×1, Echo Extract×1, Bell Dust×1"
     }
   },
   {
@@ -7906,7 +7906,7 @@ export const CATALOG: ItemDef[] = [
     "craftSkill": "cooking",
     "recipe": {
       "kek": 1000,
-      "materialsText": "Dustgrain×1, Bell Dust×1"
+      "materialsText": "Bone Chip×1, Echo Carp×1, Bell Dust×1"
     }
   },
   {
@@ -7941,7 +7941,7 @@ export const CATALOG: ItemDef[] = [
     "craftSkill": "cooking",
     "recipe": {
       "kek": 1000,
-      "materialsText": "Dustgrain×1, Bell Dust×1"
+      "materialsText": "Dustgrain×2, Rock Salt×1, Bell Dust×1"
     }
   },
   {
@@ -7955,7 +7955,7 @@ export const CATALOG: ItemDef[] = [
     "craftSkill": "cooking",
     "recipe": {
       "kek": 1000,
-      "materialsText": "Dustgrain×1, Bell Dust×1"
+      "materialsText": "Bone Chip×2, Dustgrain×1, Bell Dust×1"
     }
   },
   {
@@ -7989,7 +7989,7 @@ export const CATALOG: ItemDef[] = [
     "craftSkill": "cooking",
     "recipe": {
       "kek": 1000,
-      "materialsText": "Dustgrain×1, Bell Dust×1"
+      "materialsText": "Rock Salt×2, Bell Dust×1"
     }
   },
   {
@@ -8003,7 +8003,7 @@ export const CATALOG: ItemDef[] = [
     "craftSkill": "cooking",
     "recipe": {
       "kek": 1000,
-      "materialsText": "Dustgrain×1, Bell Dust×1"
+      "materialsText": "Dustgrain×3, Rock Salt×1, Bell Dust×1"
     }
   },
   {
@@ -8017,7 +8017,7 @@ export const CATALOG: ItemDef[] = [
     "craftSkill": "cooking",
     "recipe": {
       "kek": 1000,
-      "materialsText": "Dustgrain×1, Bell Dust×1"
+      "materialsText": "Desiccated Hide×1, Rock Salt×1, Bell Dust×1"
     }
   },
   {
@@ -8031,7 +8031,7 @@ export const CATALOG: ItemDef[] = [
     "craftSkill": "cooking",
     "recipe": {
       "kek": 1000,
-      "materialsText": "Dustgrain×1, Bell Dust×1"
+      "materialsText": "Echo Carp×1, Clay Crab×1, Bell Dust×1"
     }
   },
   {
@@ -8045,7 +8045,7 @@ export const CATALOG: ItemDef[] = [
     "craftSkill": "cooking",
     "recipe": {
       "kek": 1000,
-      "materialsText": "Dustgrain×1, Bell Dust×1"
+      "materialsText": "Rock Salt×2, Bell Dust×1"
     }
   },
   {
@@ -8059,7 +8059,7 @@ export const CATALOG: ItemDef[] = [
     "craftSkill": "cooking",
     "recipe": {
       "kek": 1000,
-      "materialsText": "Dustgrain×1, Throne Dust×1"
+      "materialsText": "Dustgrain×2, Rock Salt×1, Throne Dust×1"
     }
   },
   {
@@ -8073,7 +8073,7 @@ export const CATALOG: ItemDef[] = [
     "craftSkill": "cooking",
     "recipe": {
       "kek": 1000,
-      "materialsText": "Dustgrain×1, Throne Dust×1"
+      "materialsText": "Echo Carp×1, Dustgrain×1, Throne Dust×1"
     }
   },
   {
@@ -8087,7 +8087,7 @@ export const CATALOG: ItemDef[] = [
     "craftSkill": "cooking",
     "recipe": {
       "kek": 1000,
-      "materialsText": "Dustgrain×1, Throne Dust×1"
+      "materialsText": "Scale Hide×1, Rock Salt×1, Throne Dust×1"
     }
   },
   {
@@ -8101,7 +8101,7 @@ export const CATALOG: ItemDef[] = [
     "craftSkill": "cooking",
     "recipe": {
       "kek": 1000,
-      "materialsText": "Dustgrain×1, Throne Dust×1"
+      "materialsText": "Bone Chip×2, Dustgrain×1, Throne Dust×1"
     }
   },
   {
@@ -8144,7 +8144,7 @@ export const CATALOG: ItemDef[] = [
     "craftSkill": "cooking",
     "recipe": {
       "kek": 1000,
-      "materialsText": "Dustgrain×1, Throne Dust×1"
+      "materialsText": "Dustgrain×2, Rock Salt×1, Throne Dust×1"
     }
   },
   {
@@ -8158,7 +8158,7 @@ export const CATALOG: ItemDef[] = [
     "craftSkill": "cooking",
     "recipe": {
       "kek": 1000,
-      "materialsText": "Dustgrain×1, Throne Dust×1"
+      "materialsText": "Dustgrain×2, Throne Dust×1"
     }
   },
   {
@@ -8172,7 +8172,7 @@ export const CATALOG: ItemDef[] = [
     "craftSkill": "cooking",
     "recipe": {
       "kek": 1000,
-      "materialsText": "Dustgrain×1, Throne Dust×1"
+      "materialsText": "Echo Carp×1, Rock Salt×1, Throne Dust×1"
     }
   },
   {
@@ -8186,7 +8186,7 @@ export const CATALOG: ItemDef[] = [
     "craftSkill": "cooking",
     "recipe": {
       "kek": 1000,
-      "materialsText": "Dustgrain×1, Throne Dust×1"
+      "materialsText": "Echo Carp×1, Glass Eel×1, Dustgrain×1, Throne Dust×1"
     }
   },
   {
@@ -8454,6 +8454,47 @@ export const CATALOG: ItemDef[] = [
     },
     "consume": {
       "foodDurationSec": 0
+    }
+  },
+  {
+    "id": 486,
+    "name": "Pale Flax",
+    "description": "Pale Flax. Harvest — Pale Hollow scrubland (flax stands / fiber thickets).",
+    "icon": "/icons/items/pale-flax.png",
+    "slug": "pale-flax",
+    "kind": "base",
+    "obtainedFrom": "Harvest — Pale Hollow scrubland (flax stands / fiber thickets)"
+  },
+  {
+    "id": 487,
+    "name": "River Sand",
+    "description": "River Sand. Harvest — Pale Hollow riverbank clay banks.",
+    "icon": "/icons/items/river-sand.png",
+    "slug": "river-sand",
+    "kind": "base",
+    "obtainedFrom": "Harvest — Pale Hollow riverbank clay banks"
+  },
+  {
+    "id": 488,
+    "name": "Velvet Fiber",
+    "description": "Velvet Fiber. Drop — Bellmarsh scale/velvet foes.",
+    "icon": "/icons/items/velvet-fiber.png",
+    "slug": "velvet-fiber",
+    "kind": "base",
+    "obtainedFrom": "Drop — Bellmarsh scale/velvet foes"
+  },
+  {
+    "id": 489,
+    "name": "Distilled Pale",
+    "description": "Distilled Pale — synth material from Bellgrave crafts. Feed into higher recipes.",
+    "icon": "/icons/items/distilled-pale.png",
+    "slug": "distilled-pale",
+    "kind": "intermediate",
+    "craftLevel": 1,
+    "craftSkill": "alchemy",
+    "recipe": {
+      "kek": 1000,
+      "materialsText": "Pale Dust×2, Antidote Root×1"
     }
   },
   {
@@ -9013,6 +9054,30 @@ export const CATALOG: ItemDef[] = [
     "slug": "throne-dust",
     "kind": "base",
     "obtainedFrom": "Harvest/Drop — Throne Approach, zone-wide"
+  },
+  {
+    "id": 1062,
+    "name": "Chainmail",
+    "description": "Chainmail. Drop — Ruin Dweller (1%), Pale Hollow.",
+    "icon": "/icons/items/chainmail.png",
+    "slug": "chainmail",
+    "kind": "equipment",
+    "craftLevel": 10,
+    "craftSkill": "smithing",
+    "stats": {
+      "str": 5,
+      "dex": 5,
+      "agi": 5,
+      "def": 10
+    },
+    "slot": "body",
+    "jobRestrict": [
+      "knight",
+      "fighter",
+      "battlemage",
+      "rogue",
+      "cleric"
+    ]
   }
 ] as ItemDef[];
 

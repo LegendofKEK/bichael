@@ -128,7 +128,7 @@ export const AREAS: Record<AreaId, AreaDef> = {
         id: "ph-riverbank",
         name: "Pale Hollow Riverbank",
         method: "harvest",
-        yields: ["potters-clay", "clay-crab"],
+        yields: ["potters-clay", "clay-crab", "river-sand"],
       },
       {
         id: "ph-forest",
@@ -140,7 +140,7 @@ export const AREAS: Record<AreaId, AreaDef> = {
         id: "ph-scrubland",
         name: "Pale Hollow Scrubland",
         method: "harvest",
-        yields: ["dead-fiber"],
+        yields: ["dead-fiber", "pale-flax"],
       },
       {
         id: "ph-cliff-vines",
@@ -172,7 +172,7 @@ export const AREAS: Record<AreaId, AreaDef> = {
         id: "ph-ruin-dweller",
         name: "Ruin Dweller",
         tags: ["construct", "ruin"],
-        drops: ["cracked-brick", "metal-scrap", "pale-dust"],
+        drops: ["cracked-brick", "metal-scrap", "pale-dust", "chainmail"],
       },
       {
         id: "ph-bandit",
@@ -406,7 +406,7 @@ export const AREAS: Record<AreaId, AreaDef> = {
         id: "bm-reptile",
         name: "Marsh Scalekin",
         tags: ["reptilian"],
-        drops: ["scale-hide", "velvet-dust", "bell-dust"],
+        drops: ["scale-hide", "velvet-dust", "velvet-fiber", "bell-dust"],
       },
       {
         id: "bm-bat",
@@ -424,7 +424,7 @@ export const AREAS: Record<AreaId, AreaDef> = {
         id: "bm-golem",
         name: "Bog Construct",
         tags: ["construct", "golem"],
-        drops: ["metal-scrap", "velvet-dust", "bell-dust"],
+        drops: ["metal-scrap", "velvet-dust", "velvet-fiber", "bell-dust"],
       },
       {
         id: "bm-venom",
