@@ -153,6 +153,20 @@ import {
   resolveBattleMageAbility,
 } from "./battlemage-abilities";
 import { playerStance, resolveTimAbility } from "./tim-abilities";
+import {
+  PARTY_INVITE_RANGE,
+  PARTY_SHARE_RANGE,
+  acceptInvite,
+  buildInviteView,
+  buildPartySnapshot,
+  declineInvite,
+  disbandParty,
+  invitePlayer,
+  kickMember,
+  leaveParty,
+  onPlayerDisconnect,
+  partyAllyWallets,
+} from "./party";
 
 type Player = {
   wallet: string;
@@ -376,6 +390,8 @@ type Mob = {
   cloneIds: string[];
   /** HQ has already summoned its army (once per life). */
   shinySummoned: boolean;
+  /** Wallets that damaged this mob (party kill credit). */
+  hitBy: Set<string>;
 };
 
 const PORT = Number(process.env.PORT ?? 8787);
@@ -522,6 +538,7 @@ function spawnFieldMob(
     hqId: opts.hqId ?? shinyBits.hqId,
     cloneIds: opts.cloneIds ? [...opts.cloneIds] : [...shinyBits.cloneIds],
     shinySummoned: opts.shinySummoned ?? shinyBits.shinySummoned,
+    hitBy: new Set(),
   };
 }
 
@@ -907,6 +924,152 @@ function syncBaseMatsToInventory(p: Player) {
 function dist(ax: number, az: number, bx: number, bz: number): number {
   return Math.hypot(ax - bx, az - bz);
 }
+﻿function noteMobHit(mob: Mob, wallet: string) {
+  if (!mob.hitBy) mob.hitBy = new Set();
+  mob.hitBy.add(wallet.toLowerCase());
+}
+
+/** Beneficial AoE / ally heals: self + party members only (solo = self). */
+function partyAllies(caster: Player): Player[] {
+  const ids = partyAllyWallets(caster.wallet);
+  const out: Player[] = [];
+  for (const id of ids) {
+    const pl = players.get(id);
+    if (pl) out.push(pl);
+  }
+  if (out.length === 0) out.push(caster);
+  return out;
+}
+
+function playerByIdOrName(raw: string): Player | undefined {
+  const key = raw.trim();
+  if (!key) return undefined;
+  const byId = players.get(key.toLowerCase());
+  if (byId) return byId;
+  const lower = key.toLowerCase();
+  for (const pl of players.values()) {
+    if (pl.name.toLowerCase() === lower) return pl;
+  }
+  return undefined;
+}
+
+function partyLookup(id: string) {
+  const pl = players.get(id);
+  if (!pl) return null;
+  return {
+    name: pl.name,
+    level: pl.level,
+    job: pl.job,
+    hp: pl.hp,
+    maxHp: pl.maxHp,
+    mp: pl.mp,
+    maxMp: pl.maxMp,
+    online: true,
+  };
+}
+
+function partyNameOf(id: string): string {
+  return players.get(id)?.name ?? id.slice(0, 10);
+}
+
+function syncPartyState(wallets: string[]) {
+  for (const w of new Set(wallets.map((x) => x.toLowerCase()))) {
+    const pl = players.get(w);
+    if (pl) send(pl.ws, snapshotFor(pl));
+  }
+}
+
+function handlePartyInvite(p: Player, targetId: string) {
+  const target = playerByIdOrName(targetId);
+  if (!target) {
+    pushLog(p, "No player found to invite.");
+    return;
+  }
+  if (target.wallet === p.wallet) {
+    pushLog(p, "You cannot invite yourself.");
+    return;
+  }
+  const d = dist(p.x, p.z, target.x, target.z);
+  if (d > PARTY_INVITE_RANGE) {
+    pushLog(p, `${target.name} is too far to invite (range ${PARTY_INVITE_RANGE}).`);
+    return;
+  }
+  const res = invitePlayer(p.wallet, target.wallet);
+  if (!res.ok || !res.invite) {
+    pushLog(p, res.message);
+    return;
+  }
+  pushLog(p, `Invited ${target.name} to the party.`);
+  pushLog(target, `${p.name} invited you to a party.`);
+  send(target.ws, {
+    type: "party/invite",
+    fromId: p.wallet,
+    fromName: p.name,
+    partyId: res.invite.partyId ?? "",
+    expiresAt: res.invite.expiresAt,
+  });
+  send(target.ws, snapshotFor(target));
+}
+
+function handlePartyAccept(p: Player) {
+  const res = acceptInvite(p.wallet);
+  pushLog(p, res.message);
+  if (!res.ok) return;
+  for (const id of res.affected) {
+    if (id === p.wallet.toLowerCase()) continue;
+    const ally = players.get(id);
+    if (ally) pushLog(ally, `${p.name} joined the party.`);
+  }
+  syncPartyState(res.affected);
+}
+
+function handlePartyDecline(p: Player) {
+  const res = declineInvite(p.wallet);
+  pushLog(p, res.message);
+  if (res.ok && res.fromId) {
+    const leader = players.get(res.fromId);
+    if (leader) pushLog(leader, `${p.name} declined the party invite.`);
+  }
+  send(p.ws, snapshotFor(p));
+}
+
+function handlePartyLeave(p: Player) {
+  const res = leaveParty(p.wallet);
+  pushLog(p, res.message);
+  if (!res.ok) return;
+  for (const id of res.affected) {
+    if (id === p.wallet.toLowerCase()) continue;
+    const ally = players.get(id);
+    if (ally) pushLog(ally, `${p.name} left the party.`);
+  }
+  syncPartyState(res.affected);
+}
+
+function handlePartyKick(p: Player, targetId: string) {
+  const target = playerByIdOrName(targetId);
+  const tid = target?.wallet ?? targetId;
+  const res = kickMember(p.wallet, tid);
+  pushLog(p, res.message);
+  if (!res.ok) return;
+  const name = target?.name ?? tid.slice(0, 10);
+  for (const id of res.affected) {
+    const ally = players.get(id);
+    if (ally) pushLog(ally, `${name} was removed from the party.`);
+  }
+  syncPartyState(res.affected);
+}
+
+function handlePartyDisband(p: Player) {
+  const res = disbandParty(p.wallet);
+  pushLog(p, res.message);
+  if (!res.ok) return;
+  for (const id of res.affected) {
+    const ally = players.get(id);
+    if (ally) pushLog(ally, "The party was disbanded.");
+  }
+  syncPartyState(res.affected);
+}
+
 
 function facingTo(fromX: number, fromZ: number, toX: number, toZ: number): number {
   return Math.atan2(toX - fromX, toZ - fromZ);
@@ -1289,6 +1452,8 @@ function snapshotFor(p: Player): SnapshotMessage {
     },
     units,
     log: p.lastLog.slice(-12),
+    party: buildPartySnapshot(p.wallet, partyLookup),
+    partyInvite: buildInviteView(p.wallet, partyNameOf),
   };
 }
 
@@ -1625,18 +1790,36 @@ function rewardMobKill(p: Player, mob: Mob, now: number) {
   mob.anim = "dead";
   clearMobPendingCast(mob);
   mob.deathAt = now;
+  const participants = new Set<string>([...(mob.hitBy ?? []), p.wallet.toLowerCase()]);
+  for (const pl of players.values()) {
+    if (pl.targetId === mob.id) participants.add(pl.wallet.toLowerCase());
+  }
+  if (mob.hitBy) mob.hitBy.clear();
   // Fade out, then wait MOB_RESPAWN_MS after vanishing before returning.
   mob.respawnAt = now + MOB_DEATH_FADE_MS + MOB_RESPAWN_MS;
   const wasTarget = p.targetId === mob.id;
   if (wasTarget) p.targetId = null;
-  p.dust += 25;
-  // Level-scaled kill XP: floor(200 * enemyLevel / playerLevel), clamped [0, 200].
-  const killXp = Math.max(
-    0,
-    Math.min(200, Math.floor((200 * mob.level) / Math.max(1, p.level))),
-  );
-  p.xp += killXp;
-  tryLevelUp(p);
+  const shareRecipients: Player[] = [p];
+  for (const id of partyAllyWallets(p.wallet)) {
+    if (id === p.wallet.toLowerCase()) continue;
+    if (!participants.has(id)) continue;
+    const ally = players.get(id);
+    if (!ally) continue;
+    if (dist(ally.x, ally.z, mob.x, mob.z) > PARTY_SHARE_RANGE && ally.targetId !== mob.id) continue;
+    shareRecipients.push(ally);
+  }
+  let killXp = 0;
+  for (const recip of shareRecipients) {
+    recip.dust += 25;
+    const xpGain = Math.max(
+      0,
+      Math.min(200, Math.floor((200 * mob.level) / Math.max(1, recip.level))),
+    );
+    recip.xp += xpGain;
+    tryLevelUp(recip);
+    if (recip.wallet === p.wallet) killXp = xpGain;
+    else pushLog(recip, `Party credit — ${mob.name} down. +25 Dust, +${xpGain} XP.`);
+  }
   const dropNotes: string[] = [];
   for (const mat of mob.drops ?? []) {
     if (Math.random() < 0.65) {
@@ -1818,7 +2001,7 @@ function handleAbility(p: Player, id: AbilityId, targetId?: string) {
       facingTo,
       findMob: (tid) => findMob(tid ?? null) ?? null,
       allMobs: () => mobs,
-      allPlayers: () => [...players.values()],
+      allPlayers: () => partyAllies(p),
       onMobKill: (pl, m) => {
         const mob = findMob(m.id);
         if (mob) rewardMobKill(pl as Player, mob, now);
@@ -1834,7 +2017,7 @@ function handleAbility(p: Player, id: AbilityId, targetId?: string) {
       stopRest: (pl, reason) => stopRest(pl as Player, reason),
       facingTo,
       findMob: (tid) => findMob(tid ?? null) ?? null,
-      allPlayers: () => [...players.values()],
+      allPlayers: () => partyAllies(p),
       dist,
     });
     return;
@@ -1862,7 +2045,7 @@ function handleAbility(p: Player, id: AbilityId, targetId?: string) {
       facingTo,
       findMob: (tid) => findMob(tid ?? null) ?? null,
       allMobs: () => mobs,
-      allPlayers: () => [...players.values()],
+      allPlayers: () => partyAllies(p),
       onMobKill: (pl, m) => {
         const mob = findMob(m.id);
         if (mob) rewardMobKill(pl as Player, mob, now);
@@ -1879,7 +2062,7 @@ function handleAbility(p: Player, id: AbilityId, targetId?: string) {
       facingTo,
       findMob: (tid) => findMob(tid ?? null) ?? null,
       allMobs: () => mobs,
-      allPlayers: () => [...players.values()],
+      allPlayers: () => partyAllies(p),
       onMobKill: (pl, m) => {
         const mob = findMob(m.id);
         if (mob) rewardMobKill(pl as unknown as Player, mob, now);
@@ -1898,7 +2081,7 @@ function handleAbility(p: Player, id: AbilityId, targetId?: string) {
         const mob = findMob(m.id);
         if (mob) rewardMobKill(p, mob, now);
       },
-      allPlayers: () => [...players.values()],
+      allPlayers: () => partyAllies(p),
       dist,
       playerCombatStats: (pl) => playerCombatStats(pl as Player),
     });
@@ -2453,6 +2636,7 @@ function playerSwing(p: Player, now: number) {
     dmg += battleMageEnSpellBonus(p, now, playerCombatStats(p).int);
   }
   mob.hp -= dmg;
+  noteMobHit(mob, p.wallet);
   if (now < mob.sleepUntil) mob.sleepUntil = 0;
   // Hitting a shiny HQ/clone counts as a pull (summon + fight); they stay non-auto-aggro.
   if ((mob.shiny || mob.shinyClone) && mob.hp > 0) {
@@ -3249,6 +3433,7 @@ function onMessage(ws: WebSocket, data: string) {
         stopRest(p, "You break rest to engage.");
         p.targetId = mob.id;
         pullMobOn(mob, p.wallet, Date.now());
+        noteMobHit(mob, p.wallet);
         chaseEngaged(p);
         pushLog(
           p,
@@ -3297,6 +3482,24 @@ function onMessage(ws: WebSocket, data: string) {
     case "skill/freestat":
       handleFreeStat(p, msg.attr, msg.delta === -1 ? -1 : 1);
       break;
+    case "party/invite":
+      handlePartyInvite(p, msg.targetId);
+      break;
+    case "party/accept":
+      handlePartyAccept(p);
+      break;
+    case "party/decline":
+      handlePartyDecline(p);
+      break;
+    case "party/leave":
+      handlePartyLeave(p);
+      break;
+    case "party/kick":
+      handlePartyKick(p, msg.targetId);
+      break;
+    case "party/disband":
+      handlePartyDisband(p);
+      break;
     default:
       break;
   }
@@ -3312,8 +3515,17 @@ wss.on("connection", (ws) => {
     // Drop from the live interest set so peers stop rendering ghosts; roster keeps the char.
     if (p && p.ws === ws) {
       registerAccountChar(p);
+      const affected = onPlayerDisconnect(wallet);
       players.delete(wallet);
       walletToPlayer.delete(wallet);
+      for (const id of affected) {
+        if (id === wallet.toLowerCase()) continue;
+        const ally = players.get(id);
+        if (ally) {
+          pushLog(ally, `${p.name} left the party (disconnected).`);
+          send(ally.ws, snapshotFor(ally));
+        }
+      }
     }
   });
 });

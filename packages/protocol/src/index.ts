@@ -64,6 +64,13 @@ export const ClientMessageSchema = z.discriminatedUnion("type", [
   }),
   /** Keepalive — client ↔ server heartbeat so AFK tabs stay connected. */
   z.object({ type: z.literal("ping"), t: z.number().optional() }),
+  /** Invite a player to your party (by wallet / unit id, or exact character name). */
+  z.object({ type: z.literal("party/invite"), targetId: z.string().min(1).max(64) }),
+  z.object({ type: z.literal("party/accept") }),
+  z.object({ type: z.literal("party/decline") }),
+  z.object({ type: z.literal("party/leave") }),
+  z.object({ type: z.literal("party/kick"), targetId: z.string().min(1).max(64) }),
+  z.object({ type: z.literal("party/disband") }),
 ]);
 export type ClientMessage = z.infer<typeof ClientMessageSchema>;
 
@@ -207,6 +214,32 @@ export type UnitSnapshot = {
 
 export type InventorySlot = { tokenId: number; amount: number };
 
+
+export type PartyMemberSnapshot = {
+  id: string;
+  name: string;
+  level: number;
+  job: JobId;
+  hp: number;
+  maxHp: number;
+  mp: number;
+  maxMp: number;
+  online: boolean;
+};
+
+export type PartySnapshot = {
+  id: string;
+  leaderId: string;
+  members: PartyMemberSnapshot[];
+};
+
+export type PartyInviteSnapshot = {
+  fromId: string;
+  fromName: string;
+  partyId: string;
+  expiresAt: number;
+};
+
 export type SnapshotMessage = {
   type: "snapshot";
   tick: number;
@@ -252,6 +285,10 @@ export type SnapshotMessage = {
   };
   units: UnitSnapshot[];
   log: string[];
+  /** Active party — null when solo. */
+  party: PartySnapshot | null;
+  /** Pending invite for this client (accept/decline). */
+  partyInvite: PartyInviteSnapshot | null;
 };
 
 export type CharacterPreview = {
@@ -283,6 +320,7 @@ export type ServerMessage =
     }
   | { type: "log"; message: string }
   | { type: "pong"; t?: number }
+  | { type: "party/invite"; fromId: string; fromName: string; partyId: string; expiresAt: number }
   | {
       type: "npc/dialog";
       npcId: string;

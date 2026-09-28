@@ -22,6 +22,7 @@ import { useEffect, useMemo, useRef, useState, type DragEvent, type FormEvent } 
 import { AbilityIcon } from "./AbilityIcon";
 import { chromaKeyIconUrl } from "./chroma";
 import { CraftingPanel } from "./CraftingPanel";
+import { PartyPanel } from "./PartyPanel";
 import { EquipPanel } from "./EquipPanel";
 import { SkillTreePanel } from "./SkillTreePanel";
 import {
@@ -507,6 +508,7 @@ export function Hud() {
   const connected = useGame((s) => s.connected);
   const phase = useGame((s) => s.phase);
   const wallet = useGame((s) => s.wallet);
+  const selectedTarget = useGame((s) => s.selectedTarget);
   const npcDialog = useGame((s) => s.npcDialog);
   /** Prefer id lookup — avoid `s.me()` in selector (new call every select). */
   const me = useGame((s) => {
@@ -520,6 +522,7 @@ export function Hud() {
   const [bookOpen, setBookOpen] = useState(false);
   const [treeOpen, setTreeOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [partyOpen, setPartyOpen] = useState(false);
   const [uiSettings, setUiSettings] = useState<UiSettings>(() => loadUiSettings());
   const [menuFocus, setMenuFocus] = useState<string>("character");
   const [bookTab, setBookTab] = useState<string>("time");
@@ -769,6 +772,19 @@ export function Hud() {
           <button
             type="button"
             role="menuitem"
+            className={`hud-cmd-btn${menuFocus === "party" ? " selected" : ""}`}
+            onMouseEnter={() => setMenuFocus("party")}
+            onFocus={() => setMenuFocus("party")}
+            onClick={() => {
+              setMenuFocus("party");
+              setPartyOpen((v) => !v);
+            }}
+          >
+            Party
+          </button>
+          <button
+            type="button"
+            role="menuitem"
             className={`hud-cmd-btn${menuFocus === "settings" ? " selected" : ""}`}
             onMouseEnter={() => setMenuFocus("settings")}
             onFocus={() => setMenuFocus("settings")}
@@ -799,6 +815,31 @@ export function Hud() {
       {bagOpen && <EquipPanel you={you} me={me} onClose={() => setBagOpen(false)} />}
       {craftOpen && <CraftingPanel you={you} onClose={() => setCraftOpen(false)} />}
       {treeOpen && <SkillTreePanel onClose={() => setTreeOpen(false)} />}
+      {!partyOpen && snapshot?.partyInvite && (
+        <div className="party-invite-toast" role="status">
+          <span>
+            <strong>{snapshot.partyInvite.fromName}</strong> invited you to a party.
+          </span>
+          <button type="button" className="hud-cmd-btn selected" onClick={() => send({ type: "party/accept" })}>
+            Accept
+          </button>
+          <button type="button" className="hud-cmd-btn" onClick={() => send({ type: "party/decline" })}>
+            Decline
+          </button>
+          <button type="button" className="hud-cmd-btn" onClick={() => setPartyOpen(true)}>
+            Party
+          </button>
+        </div>
+      )}
+      {partyOpen && wallet && (
+        <PartyPanel
+          party={snapshot?.party ?? null}
+          invite={snapshot?.partyInvite ?? null}
+          selectedTarget={selectedTarget}
+          myWallet={wallet}
+          onClose={() => setPartyOpen(false)}
+        />
+      )}
       {settingsOpen && (
         <div className="settings-panel">
           <div className="settings-panel-head">

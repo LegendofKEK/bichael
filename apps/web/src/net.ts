@@ -192,6 +192,8 @@ export function connectSocket() {
       g.pushLog(msg.message);
     } else if (msg.type === "error") {
       g.pushLog(`Error: ${msg.message}`);
+    } else if (msg.type === "party/invite") {
+      g.pushLog(`${msg.fromName} invited you to a party � open Party to accept.`);
     } else if (msg.type === "npc/dialog") {
       g.setNpcDialog({
         npcId: msg.npcId,
