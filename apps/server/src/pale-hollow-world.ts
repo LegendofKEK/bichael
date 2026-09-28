@@ -6,7 +6,9 @@ import {
   PH_HUB,
   paleHollowHeight,
   paleHollowNodeSpawnPoints,
+  paleHollowMobJob,
   type PaleHollowMobDef,
+  type PaleHollowMobJob,
   type PaleHollowNodeDef,
   type PaleHollowRareDrop,
 } from "@bellgrave/config";
@@ -24,6 +26,7 @@ export type FieldMob = {
   maxHp: number;
   level: number;
   archetype: PaleHollowMobDef["archetype"];
+  job: PaleHollowMobJob;
   aggro: PaleHollowMobDef["aggro"];
   aggroRange: number;
   linkRange: number;
@@ -55,6 +58,7 @@ function fromDef(d: PaleHollowMobDef): FieldMob {
     maxHp: d.hp,
     level: d.level,
     archetype: d.archetype,
+    job: paleHollowMobJob(d),
     aggro: d.aggro,
     aggroRange: d.aggroRange,
     linkRange: d.linkRange ?? 0,
