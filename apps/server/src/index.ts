@@ -883,6 +883,7 @@ function playerBuffs(p: Player): UnitSnapshot["buffs"] {
     healAbsorbUntil: p.healAbsorbUntil,
     healAbsorbHp: now < p.healAbsorbUntil ? p.healAbsorbHp : 0,
     regenUntil: p.regenUntil,
+    blindUntil: p.blindUntil,
   };
 }
 
@@ -2104,7 +2105,7 @@ function handleUseItem(p: Player, tokenId: number) {
     return;
   }
   // Mock-chain burn: inventory removal IS the burn for MVP
-  const heal = 60;
+  const heal = getItem(ITEM.POTION)?.consume?.hp ?? 60;
   p.hp = Math.min(p.maxHp, p.hp + heal);
   pushLog(p, `Potion burned on-chain (mock). Restored ${heal} HP.`);
 }
@@ -2118,8 +2119,12 @@ function playerHastePct(p: Player, now: number): number {
 
 function playerMoveSpeed(p: Player, now: number): number {
   let speed = p.flux ? PLAYER_SPEED_FLUX : PLAYER_SPEED;
-  if (now < p.moveUntil && p.movePct > 0) {
-    speed *= 1 + p.movePct;
+  // Haste buffs use positive movePct; enemy Slow writes negative movePct (+ moveUntil).
+  if (now < p.moveUntil && p.movePct !== 0) {
+    speed *= Math.max(0.2, 1 + p.movePct);
+  } else if (now < p.slowUntil) {
+    // Fallback if slowUntil is set without a movePct drag.
+    speed *= 0.78;
   }
   const treeMove = playerTreeBonuses(p).movePct;
   if (treeMove > 0) speed *= 1 + treeMove;
@@ -2140,12 +2145,24 @@ function playerSwing(p: Player, now: number) {
 
   const haste = playerHastePct(p, now);
   const weaponDelay = p.equip.main ? getItem(p.equip.main)?.delayMs : undefined;
-  const delay = resolveSwingDelayMs(weaponDelay, haste);
+  let delay = resolveSwingDelayMs(weaponDelay, haste);
+  // Enemy Slow: swingDelayMs clamps haste>=0, so apply attack-speed drag here.
+  if (now < p.slowUntil) {
+    const slowAmt =
+      now < p.moveUntil && p.movePct < 0 ? -p.movePct : 0.22;
+    delay = Math.floor(delay * (1 + slowAmt));
+  }
   p.nextSwingAt = now + delay;
   p.facing = facingTo(p.x, p.z, mob.x, mob.z);
   p.anim = "melee";
   // Cover most of the swing window so haste still shows a punch each hit.
   p.animUntil = now + Math.max(160, Math.min(delay * 0.9, 520));
+
+  // Enemy Blind / Shield Bash daze — same wild-swing chance as mob Blind.
+  if (now < p.blindUntil && Math.random() < 0.45) {
+    pushLog(p, "You swing wild (Blind)!");
+    return;
+  }
 
   const stance = playerStance(p);
   const stats = playerCombatStats(p);
