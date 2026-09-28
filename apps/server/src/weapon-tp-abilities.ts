@@ -5,15 +5,16 @@ import type {
   WeaponType,
 } from "@bellgrave/combat";
 import {
-  GUARD_L1,
   WEAPON_TP_ABILITIES,
   WEAPON_TP_COST,
   attackFromStats,
   defenseFromVit,
   fStr,
+  jobStatsAtLevel,
   physicalDamage,
   weaponTpBonusDamage,
   weaponTypeFromTokenId,
+  type JobId,
 } from "@bellgrave/combat";
 
 export type WeaponTpPlayer = {
@@ -39,6 +40,8 @@ export type WeaponTpMob = {
   alive: boolean;
   hp: number;
   maxHp: number;
+  job: JobId;
+  level: number;
   stunUntil: number;
   paraUntil: number;
   slowUntil: number;
@@ -136,7 +139,8 @@ export function resolveWeaponTpAbility(
   const stats = ctx.playerCombatStats(p);
   const physical = p.job !== "time_mage" && p.job !== "sorcerer" && p.job !== "cleric";
   let att = attackFromStats(stats, "none", ctx.playerWeaponBonus(p), { physical: true });
-  let defStat = defenseFromVit(GUARD_L1.vit);
+  const mobStats = jobStatsAtLevel(mob.job, mob.level);
+  let defStat = defenseFromVit(mobStats.vit);
   if (now < mob.diaUntil) defStat = Math.max(1, Math.floor(defStat * 0.7));
 
   const hits = Math.max(1, def.hits);
@@ -149,7 +153,7 @@ export function resolveWeaponTpAbility(
     let hit = physicalDamage(
       att,
       defStat,
-      fStr(stats.str, GUARD_L1.vit),
+      fStr(stats.str, mobStats.vit),
       false,
     );
     hit = Math.max(1, Math.floor(hit * def.ftp));

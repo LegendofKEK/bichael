@@ -548,8 +548,7 @@ function applyEnfeeble(
   if (id === "paralyga") m.paraUntil = now + dur;
   if (id === "silencega") {
     m.silenceUntil = now + dur;
-    // Temporal mute: interrupt windup + drop aggro so pack reshuffles.
+    // Mute casts; brief swing hitch, but do not drop hate.
     m.nextSwingAt = Math.max(m.nextSwingAt, now + 2200);
-    m.targetId = null;
   }
 }
