@@ -563,7 +563,7 @@ def main() -> None:
             "slot": "body",
             "jobRestrict": ["rogue", "knight", "fighter"],
             "stats": {"def": 10, "hp": 20, "agi": 2},
-            "recipe": {"kek": 1000, "materialsText": "Scale Leather×3, Bell Dust×1"},
+            "recipe": {"kek": 1000, "materialsText": "Stone Scale×3, Soft Pelt×1, Ash Dust×1"},
         },
     ]
     for stub in stubs:

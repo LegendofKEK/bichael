@@ -226,7 +226,7 @@ export const CATALOG: ItemDef[] = [
     },
     "recipe": {
       "kek": 1000,
-      "materialsText": "Scale Leather×3, Bell Dust×1"
+      "materialsText": "Stone Scale×3, Soft Pelt×1, Ash Dust×1"
     }
   },
   {
@@ -324,7 +324,7 @@ export const CATALOG: ItemDef[] = [
     "craftSkill": "smithing",
     "recipe": {
       "kek": 1000,
-      "materialsText": "Steel Ingot×1, Ash Dust×1"
+      "materialsText": "Steel Ingot×1, Slag Dust×1"
     }
   },
   {
@@ -462,7 +462,7 @@ export const CATALOG: ItemDef[] = [
     "craftSkill": "woodworking",
     "recipe": {
       "kek": 1000,
-      "materialsText": "Bellwood Lumber×1, Darksteel Ingot×1, Bell Dust×1"
+      "materialsText": "Bellwood Lumber×1, Darksteel Ingot×1, Acid Bolt Compound×1, Bell Dust×1"
     },
     "stats": {
       "hp": 68
@@ -1024,7 +1024,7 @@ export const CATALOG: ItemDef[] = [
     "craftSkill": "clothcraft",
     "recipe": {
       "kek": 1000,
-      "materialsText": "Velvet Fiber×2, Bell Dust×1"
+      "materialsText": "Velvet Fiber×2 or Velvet Dust×3, Bell Dust×1"
     }
   },
   {
@@ -1098,7 +1098,7 @@ export const CATALOG: ItemDef[] = [
     "description": "Bone Arrowhead×6 — synth material from Bellgrave crafts. Feed into higher recipes.",
     "icon": "/icons/items/bone-arrowhead.png",
     "slug": "bone-arrowhead",
-    "kind": "filler",
+    "kind": "intermediate",
     "craftLevel": 5,
     "craftSkill": "bonecraft",
     "recipe": {
@@ -1117,7 +1117,7 @@ export const CATALOG: ItemDef[] = [
     "craftSkill": "bonecraft",
     "recipe": {
       "kek": 1000,
-      "materialsText": "Bone Chip×1, Ashbeam Lumber×1, Pale Dust×1"
+      "materialsText": "Bone Arrowhead×1, Ashbeam Lumber×1, Pale Dust×1"
     },
     "stats": {
       "hp": 29
@@ -1675,7 +1675,7 @@ export const CATALOG: ItemDef[] = [
     "craftSkill": "smithing",
     "recipe": {
       "kek": 1000,
-      "materialsText": "Copper Ore×2, Tin Ore×1, Pale Dust×1"
+      "materialsText": "Copper Ore×2, Tin Ore×1 or Metal Scrap×5, Pale Dust×1"
     }
   },
   {
@@ -1866,7 +1866,7 @@ export const CATALOG: ItemDef[] = [
     "craftSkill": "smithing",
     "recipe": {
       "kek": 1000,
-      "materialsText": "Bronze Ingot×3, Pale Dust×1"
+      "materialsText": "Bronze Ingot×3, Cobble×2, Pale Dust×1"
     },
     "stats": {
       "def": 6,
@@ -2389,7 +2389,7 @@ export const CATALOG: ItemDef[] = [
     "icon": "/icons/items/darksteel-blade.png",
     "slug": "darksteel-blade",
     "kind": "equipment",
-    "craftLevel": 64,
+    "craftLevel": 65,
     "craftSkill": "smithing",
     "recipe": {
       "kek": 1000,
@@ -2745,7 +2745,7 @@ export const CATALOG: ItemDef[] = [
     "craftSkill": "smithing",
     "recipe": {
       "kek": 1000,
-      "materialsText": "Orichalcum Ingot×3, Marble Chip×2, Orichalcum Goldsmith Wire×2, Regalia Filigree×1, Throne Dust×1"
+      "materialsText": "Orichalcum Ingot×3, Marble Chip×2, Darksteel Goldsmith Wire×2, Goldsmith Filigree×1, Throne Dust×1"
     },
     "stats": {
       "def": 21,
@@ -2849,7 +2849,7 @@ export const CATALOG: ItemDef[] = [
     "craftSkill": "woodworking",
     "recipe": {
       "kek": 1000,
-      "materialsText": "Ashbeam Log×2, Pale Dust×1"
+      "materialsText": "Ashbeam Log×2, Bark Strip×1, Pale Dust×1"
     }
   },
   {
@@ -2877,7 +2877,7 @@ export const CATALOG: ItemDef[] = [
     "craftSkill": "woodworking",
     "recipe": {
       "kek": 1000,
-      "materialsText": "Ashbeam Lumber×2, Pale Dust×1"
+      "materialsText": "Ashbeam Lumber×2, Cracked Brick×1, Pale Dust×1"
     },
     "stats": {
       "def": 4,
@@ -2966,11 +2966,11 @@ export const CATALOG: ItemDef[] = [
     "icon": "/icons/items/ashbeam-siege-stock.png",
     "slug": "ashbeam-siege-stock",
     "kind": "filler",
-    "craftLevel": 18,
+    "craftLevel": 20,
     "craftSkill": "woodworking",
     "recipe": {
       "kek": 1000,
-      "materialsText": "Ashbeam Lumber×1, Pale Dust×1"
+      "materialsText": "Ashbeam Lumber×1, Iron Arrowhead×1, Ash Dust×1"
     }
   },
   {
@@ -3332,7 +3332,7 @@ export const CATALOG: ItemDef[] = [
     "craftSkill": "woodworking",
     "recipe": {
       "kek": 1000,
-      "materialsText": "Bellwood Log×2, Bell Dust×1"
+      "materialsText": "Bellwood Log×2, Bark Strip×1, Bell Dust×1"
     }
   },
   {
@@ -3599,7 +3599,7 @@ export const CATALOG: ItemDef[] = [
     "craftSkill": "woodworking",
     "recipe": {
       "kek": 1000,
-      "materialsText": "Bellwood Lumber×3, Orichalcum Ingot×1, Throne Dust×2"
+      "materialsText": "Bellwood Lumber×2 or Petrified Lumber×2, Ancient Branch×1, Orichalcum Ingot×1, Throne Dust×2"
     }
   },
   {
@@ -3928,7 +3928,7 @@ export const CATALOG: ItemDef[] = [
     "craftSkill": "leathercraft",
     "recipe": {
       "kek": 1000,
-      "materialsText": "Soft Pelt×1, Climbing Cord×1, Ash Dust×1"
+      "materialsText": "Leather×1, Climbing Cord×1, Ash Dust×1"
     },
     "stats": {
       "def": 9,
@@ -5274,7 +5274,7 @@ export const CATALOG: ItemDef[] = [
     "craftSkill": "goldsmithing",
     "recipe": {
       "kek": 1000,
-      "materialsText": "Orichalcum Ingot×1, Bell Dust×1"
+      "materialsText": "Mythril Ingot×1, Fine Leather×1, Bell Dust×1"
     },
     "stats": {
       "def": 10
@@ -6066,7 +6066,7 @@ export const CATALOG: ItemDef[] = [
     "craftSkill": "goldsmithing",
     "recipe": {
       "kek": 1000,
-      "materialsText": "River Sand×2, Potter's Clay×1, Pale Dust×1"
+      "materialsText": "River Sand×2, Potter's Clay×1 or Limestone×3, Pale Dust×1"
     }
   },
   {
@@ -6168,7 +6168,7 @@ export const CATALOG: ItemDef[] = [
     "craftSkill": "goldsmithing",
     "recipe": {
       "kek": 1000,
-      "materialsText": "Copper Ore×1, Pale Dust×1"
+      "materialsText": "Copper Ore×1 or Tile Shard×2, Pale Dust×1"
     }
   },
   {
@@ -6524,7 +6524,7 @@ export const CATALOG: ItemDef[] = [
     "craftSkill": "goldsmithing",
     "recipe": {
       "kek": 1000,
-      "materialsText": "Orichalcum Ingot×1, Bell Dust×1"
+      "materialsText": "Mythril Ingot×1, Bell Dust×1"
     },
     "stats": {
       "str": 8
@@ -6762,7 +6762,7 @@ export const CATALOG: ItemDef[] = [
     "icon": "/icons/items/ether.png",
     "slug": "ether",
     "kind": "consumable",
-    "craftLevel": 18,
+    "craftLevel": 20,
     "craftSkill": "alchemy",
     "recipe": {
       "kek": 1000,
@@ -6964,7 +6964,7 @@ export const CATALOG: ItemDef[] = [
     "craftSkill": "alchemy",
     "recipe": {
       "kek": 1000,
-      "materialsText": "Distilled Ash×1, Glass Bead×1, Slag Dust×1"
+      "materialsText": "Distilled Ash×1, Glass Bead×1, Insect Wing×1, Slag Dust×1"
     },
     "stats": {
       "hp": 44
@@ -9059,8 +9059,8 @@ export const CATALOG: ItemDef[] = [
 
 export const CATALOG_BY_ID: Record<number, ItemDef> = Object.fromEntries(
   CATALOG.map((i) => [i.id, i]),
-) as Record<number, ItemDef>;
+);
 
 export const CATALOG_BY_SLUG: Record<string, ItemDef> = Object.fromEntries(
   CATALOG.map((i) => [i.slug, i]),
-) as Record<string, ItemDef>;
+);
