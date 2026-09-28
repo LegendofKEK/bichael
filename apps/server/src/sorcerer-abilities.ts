@@ -8,7 +8,7 @@ import {
   type SorcererAbilityId,
   type SorcererElement,
 } from "@bellgrave/combat";
-import { ITEM } from "@bellgrave/config";
+import { ITEM, PH_HUB_SPAWN, paleHollowStandHeight } from "@bellgrave/config";
 import type { AbilityId } from "@bellgrave/protocol";
 
 export type SorcererPlayer = {
@@ -27,6 +27,7 @@ export type SorcererPlayer = {
   targetId: string | null;
   facing: number;
   x: number;
+  y: number;
   z: number;
   recasts: Partial<Record<AbilityId, number>>;
   arcaneFloodUntil: number;
@@ -264,34 +265,34 @@ export function resolveSorcererAbility(
     return true;
   }
 
-  if (id === "sc_phase_warp") {
+  if (id === "sc_phase_warp" || id === "sc_ash_escape") {
     if (!spendMp(p, mpCost, now)) {
       hooks.pushLog(p, "Not enough MP.");
       return true;
     }
     payRecast();
-    p.x = 0;
-    p.z = 20;
+    // Pale Hollow hub spawn (not leftover hall coords).
+    p.x = PH_HUB_SPAWN.x;
+    p.z = PH_HUB_SPAWN.z;
+    p.y = paleHollowStandHeight(p.x, p.z);
+    p.facing = PH_HUB_SPAWN.facing;
     p.moveTo = null;
     p.targetId = null;
-    p.anim = "cast";
-    p.animUntil = now + 800;
-    hooks.pushLog(p, `${def.label} â€” you blink to the hall mouth.`);
-    return true;
-  }
-  if (id === "sc_ash_escape") {
-    if (!spendMp(p, mpCost, now)) {
-      hooks.pushLog(p, "Not enough MP.");
-      return true;
+    p.enmity = 0;
+    for (const m of hooks.allMobs()) {
+      if (m.targetId === p.wallet) m.targetId = null;
     }
-    payRecast();
-    p.z = Math.min(24, p.z + 6);
-    p.moveTo = null;
     p.anim = "cast";
-    p.animUntil = now + 500;
-    hooks.pushLog(p, `${def.label} â€” you slip back from the fray.`);
+    p.animUntil = now + (id === "sc_phase_warp" ? 800 : 500);
+    hooks.pushLog(
+      p,
+      id === "sc_phase_warp"
+        ? `${def.label} — you blink to the Pale Hollow encampment.`
+        : `${def.label} — ash takes you back to the encampment.`,
+    );
     return true;
   }
+
 
   // â€”â€” Elemental nukes â€”â€”
   if (def.category === "elemental" && def.potency != null && def.element) {
