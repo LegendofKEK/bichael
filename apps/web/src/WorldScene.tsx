@@ -12,6 +12,7 @@ import { Suspense, useEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 import {
   FLUX_AURA_URL,
+  applyArtFacing,
   facingPick,
   jobSpriteBase,
   pickMeleeVariant,
@@ -483,11 +484,13 @@ function RemotePlayerBillboard({ unitId, unit }: { unitId: string; unit: UnitSna
     }
     const pick = facingPick(u.facing, toCamera, lastFacing.current);
     lastFacing.current = pick;
+    const slug = spriteSlug(jobSpriteBase(u.job), u.gender ?? "male");
+    const draw = applyArtFacing(slug, pick);
     const wf = anim === "walk" ? walkFrameAt(performance.now()) : 0;
     const url = playerSpriteUrl(
       u.job,
       anim,
-      pick.key,
+      draw.key,
       wf,
       u.gender ?? "male",
       anim === "melee" ? meleeVariant.current : undefined,
@@ -502,7 +505,7 @@ function RemotePlayerBillboard({ unitId, unit }: { unitId: string; unit: UnitSna
     const { spriteW, spriteH } = playerSpriteWorldSize(tex);
     lockUpright(meshRef.current);
     meshRef.current.position.y = spriteH * 0.5;
-    meshRef.current.scale.set(pick.mirror ? -spriteW : spriteW, spriteH, 1);
+    meshRef.current.scale.set(draw.mirror ? -spriteW : spriteW, spriteH, 1);
   });
 
   return (
@@ -1043,16 +1046,18 @@ function SheetBillboardInner({
     } else {
       const pick = facingPick(bodyFacing, toCamera, lastFacing.current);
       lastFacing.current = pick;
+      const slug = spriteSlug(jobSpriteBase(u.job), u.gender ?? "male");
+      const draw = applyArtFacing(slug, pick);
       const wf = anim === "walk" ? walkFrameAt(performance.now()) : 0;
       url = playerSpriteUrl(
         u.job,
         anim,
-        pick.key,
+        draw.key,
         wf,
         u.gender ?? "male",
         anim === "melee" ? meleeVariant.current : undefined,
       );
-      mirror = pick.mirror;
+      mirror = draw.mirror;
     }
 
     if (url !== lastUrl.current) {
@@ -2160,8 +2165,13 @@ function HallNpcSprite({ unit, spriteUrl }: { unit: UnitSnapshot; spriteUrl: str
     const toCamera = yawBillboardToCamera(billboard.current, camera);
     const pick = facingPick(u.facing, toCamera, lastFacing.current);
     lastFacing.current = pick;
+    const slug =
+      u.kind === "player"
+        ? spriteSlug(jobSpriteBase(u.job), (u.gender as Gender | undefined) ?? "male")
+        : "";
+    const draw = slug ? applyArtFacing(slug, pick) : pick;
     lockUpright(meshRef.current);
-    meshRef.current.scale.set(pick.mirror ? -spriteW : spriteW, spriteH, 1);
+    meshRef.current.scale.set(draw.mirror ? -spriteW : spriteW, spriteH, 1);
     // Warm fire rim when standing in the hub encampment.
     const mat = meshRef.current.material as THREE.MeshBasicMaterial;
     if (mat && !Array.isArray(mat)) {

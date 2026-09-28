@@ -1,4 +1,17 @@
-/** 8-direction sprite facing for isometric TIM. */
+/**
+ * 8-direction sprite facing for isometric player jobs.
+ *
+ * Authored PNG lateral convention (male TIM is the gold standard):
+ * - `-e`  profile faces **screen-right**
+ * - `-ne` back 3⁄4 walks toward **upper-right**
+ * - `-se` front 3⁄4 walks toward **lower-right** (primary gameplay)
+ * - `-n` / `-s` back / front
+ * Runtime mirrors: NW←NE, W←E, SW←SE via FacingPick.mirror (scale.x).
+ *
+ * If new art is authored facing the opposite lateral side, either flip the
+ * PNG to match this convention or register the slug+DirKey in
+ * ART_LATERAL_INVERT below (XOR'd into mirror at draw time).
+ */
 
 export type DirKey = "n" | "ne" | "e" | "se" | "s";
 export type Gender = "male" | "female" | "pepeka";
@@ -9,6 +22,24 @@ export type FacingPick = {
   /** Horizontal flip for west-side facings. */
   mirror: boolean;
 };
+
+/**
+ * Job sprite slugs whose authored art for a DirKey faces the opposite lateral
+ * side of the TIM convention. Empty after baking flips into PNGs; keep as the
+ * systemic escape hatch for future kits.
+ */
+export const ART_LATERAL_INVERT: Readonly<
+  Partial<Record<string, ReadonlySet<DirKey>>>
+> = {
+  // e.g. "some-job": new Set(["e", "ne"]),
+};
+
+/** Apply ART_LATERAL_INVERT: XOR mirror so wrong-facing art still tracks movement. */
+export function applyArtFacing(jobSlug: string, pick: FacingPick): FacingPick {
+  const dirs = ART_LATERAL_INVERT[jobSlug];
+  if (!dirs || !dirs.has(pick.key)) return pick;
+  return { key: pick.key, mirror: !pick.mirror };
+}
 
 const OCT_PICKS: FacingPick[] = [
   { key: "s", mirror: false },
