@@ -76,6 +76,58 @@ function makeGlowOrbTexture(): THREE.CanvasTexture {
   return tex;
 }
 
+/** Multi-spoke enemy cast circle (transparent, animated via mesh rotation). */
+function makeEnemyCastCircleTexture(): THREE.CanvasTexture {
+  const c = document.createElement("canvas");
+  c.width = c.height = 256;
+  const ctx = c.getContext("2d")!;
+  const cx = 128;
+  const cy = 128;
+  // Soft outer glow
+  const glow = ctx.createRadialGradient(cx, cy, 70, cx, cy, 124);
+  glow.addColorStop(0, "rgba(255, 120, 70, 0)");
+  glow.addColorStop(0.55, "rgba(255, 140, 80, 0.35)");
+  glow.addColorStop(1, "rgba(255, 90, 50, 0)");
+  ctx.fillStyle = glow;
+  ctx.beginPath();
+  ctx.arc(cx, cy, 124, 0, Math.PI * 2);
+  ctx.fill();
+  // Concentric rings
+  for (const [r, w, a] of [
+    [98, 5, 0.85],
+    [78, 3, 0.55],
+    [58, 2.5, 0.7],
+  ] as const) {
+    ctx.strokeStyle = `rgba(255, 170, 110, ${a})`;
+    ctx.lineWidth = w;
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+  // Spoke ticks — reads as multi-frame when spun
+  for (let i = 0; i < 16; i++) {
+    const a = (i / 16) * Math.PI * 2;
+    const inner = i % 2 === 0 ? 52 : 62;
+    const outer = i % 2 === 0 ? 108 : 96;
+    ctx.strokeStyle = i % 4 === 0 ? "rgba(255, 230, 160, 0.9)" : "rgba(255, 120, 70, 0.75)";
+    ctx.lineWidth = i % 4 === 0 ? 3.2 : 1.8;
+    ctx.beginPath();
+    ctx.moveTo(cx + Math.cos(a) * inner, cy + Math.sin(a) * inner);
+    ctx.lineTo(cx + Math.cos(a) * outer, cy + Math.sin(a) * outer);
+    ctx.stroke();
+  }
+  // Clear center so sprite stays readable
+  ctx.globalCompositeOperation = "destination-out";
+  ctx.beginPath();
+  ctx.arc(cx, cy, 42, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.globalCompositeOperation = "source-over";
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.needsUpdate = true;
+  return tex;
+}
+
 /** Soft ring for resonance pulses / cast burst. */
 function makeResonanceRingTexture(): THREE.CanvasTexture {
   const c = document.createElement("canvas");
@@ -917,6 +969,10 @@ function SheetBillboardInner({
   const barsRoot = useRef<THREE.Group>(null);
   const targetRing = useRef<THREE.Mesh>(null);
   const castTelegraph = useRef<THREE.Mesh>(null);
+  const castCircleGround = useRef<THREE.Mesh>(null);
+  const castCircleFront = useRef<THREE.Mesh>(null);
+  const castCircleMat = useRef<THREE.MeshBasicMaterial>(null);
+  const castFrontMat = useRef<THREE.MeshBasicMaterial>(null);
   const lastUrl = useRef("");
   const lastFacing = useRef<ReturnType<typeof facingPick> | null>(null);
   const lastAnimUntil = useRef(0);
@@ -935,6 +991,7 @@ function SheetBillboardInner({
 
   const orbTex = useMemo(() => makeGlowOrbTexture(), []);
   const pulseTex = useMemo(() => makeResonanceRingTexture(), []);
+  const enemyCastTex = useMemo(() => makeEnemyCastCircleTexture(), []);
   const tdRingTex = useMemo(() => makeEarthChronaRingTexture(), []);
   const tdCrackTex = useMemo(() => makeChronaCrackTexture(), []);
   const petrifyTex = useMemo(() => makePetrifyCrackTexture(), []);
@@ -942,11 +999,12 @@ function SheetBillboardInner({
     () => () => {
       orbTex.dispose();
       pulseTex.dispose();
+      enemyCastTex.dispose();
       tdRingTex.dispose();
       tdCrackTex.dispose();
       petrifyTex.dispose();
     },
-    [orbTex, pulseTex, tdRingTex, tdCrackTex, petrifyTex],
+    [orbTex, pulseTex, enemyCastTex, tdRingTex, tdCrackTex, petrifyTex],
   );
 
   const jobKey = unit.kind === "player" ? (unit.job ?? "time_mage") : "mob";
@@ -1035,24 +1093,67 @@ function SheetBillboardInner({
       }
     }
 
+    const casting = u.anim === "cast" && u.animUntil > Date.now();
+    // Forward offset toward facing — cast tell sits in front of the caster (toward player).
+    const faceAng = u.facing ?? 0;
+    const fwdX = Math.sin(faceAng);
+    const fwdZ = Math.cos(faceAng);
+    const castFwd = u.kind === "mob" ? 0.7 : 0.15;
+
     if (castTelegraph.current) {
-      const casting = u.anim === "cast" && u.animUntil > Date.now();
       castTelegraph.current.visible = casting;
       if (casting) {
         const remain = Math.max(0, u.animUntil - Date.now());
-        const life = 1 - Math.min(1, remain / 800);
-        const s = 0.7 + life * 1.4;
+        const dur = Math.max(800, Math.min(1200, remain + 50));
+        const life = 1 - Math.min(1, remain / dur);
+        const s = u.kind === "mob" ? 0.95 + life * 1.55 : 0.7 + life * 1.4;
+        castTelegraph.current.position.set(fwdX * castFwd, 0.05, fwdZ * castFwd);
         castTelegraph.current.scale.set(s, s, 1);
+        castTelegraph.current.rotation.z = performance.now() / 900;
         const matC = castTelegraph.current.material as THREE.MeshBasicMaterial;
-        matC.opacity = 0.25 + (1 - life) * 0.45;
-        matC.color.set(u.kind === "mob" ? "#e07050" : "#70c0e8");
+        matC.opacity = u.kind === "mob" ? 0.4 + (1 - life) * 0.45 : 0.25 + (1 - life) * 0.45;
+        matC.color.set(u.kind === "mob" ? "#ff8050" : "#70c0e8");
       }
     }
 
-    // Quarks cast burst — rising edge when a cast wind-up starts (Time Mage + others).
-    if (u.kind === "player" && u.anim === "cast" && u.animUntil > lastCastAnimUntil.current) {
+    // Multi-frame ground cast circle (enemy casters) — spins + pulses in front of feet.
+    if (castCircleGround.current && castCircleMat.current) {
+      const show = casting && u.kind === "mob";
+      castCircleGround.current.visible = show;
+      if (show) {
+        const t = performance.now() / 1000;
+        const remain = Math.max(0, u.animUntil - Date.now());
+        const life = 1 - Math.min(1, remain / 1000);
+        const pulse = 1.15 + Math.sin(t * 8) * 0.08 + life * 0.55;
+        castCircleGround.current.position.set(fwdX * castFwd, 0.06, fwdZ * castFwd);
+        castCircleGround.current.scale.set(pulse, pulse, 1);
+        castCircleGround.current.rotation.z = t * 2.4;
+        castCircleMat.current.opacity = 0.55 + (1 - life) * 0.3 + Math.sin(t * 10) * 0.08;
+      }
+    }
+
+    // Vertical cast circle billboard — reads clearly in front of the mob sprite.
+    if (castCircleFront.current && castFrontMat.current) {
+      const show = casting && u.kind === "mob";
+      castCircleFront.current.visible = show;
+      if (show) {
+        const t = performance.now() / 1000;
+        const remain = Math.max(0, u.animUntil - Date.now());
+        const life = 1 - Math.min(1, remain / 1000);
+        const pulse = 1.05 + Math.sin(t * 7) * 0.1 + life * 0.35;
+        castCircleFront.current.position.set(fwdX * (castFwd + 0.15), 1.05, fwdZ * (castFwd + 0.15));
+        castCircleFront.current.scale.set(pulse * 1.35, pulse * 1.35, 1);
+        castCircleFront.current.rotation.z = -t * 1.8;
+        castFrontMat.current.opacity = 0.5 + (1 - life) * 0.35 + Math.sin(t * 9) * 0.1;
+      }
+    }
+
+    // Quarks cast burst — rising edge for players AND enemy casters.
+    if (u.anim === "cast" && u.animUntil > lastCastAnimUntil.current) {
       lastCastAnimUntil.current = u.animUntil;
-      spawnVfx("castBurst", { x: u.x, y: u.y ?? 0, z: u.z });
+      const burstX = u.x + fwdX * (u.kind === "mob" ? castFwd : 0);
+      const burstZ = u.z + fwdZ * (u.kind === "mob" ? castFwd : 0);
+      spawnVfx("castBurst", { x: burstX, y: u.y ?? 0, z: burstZ });
     } else if (u.anim !== "cast") {
       lastCastAnimUntil.current = 0;
     }
@@ -1644,7 +1745,7 @@ function SheetBillboardInner({
         />
       </mesh>
 
-      {/* Cast telegraph â€” expanding ground marker during cast wind-up */}
+      {/* Cast telegraph — expanding ground marker during cast wind-up */}
       <mesh
         ref={castTelegraph}
         rotation={[-Math.PI / 2, 0, 0]}
@@ -1652,13 +1753,56 @@ function SheetBillboardInner({
         visible={false}
         renderOrder={2}
       >
-        <ringGeometry args={[0.35, 0.95, 36]} />
+        <ringGeometry args={[0.28, 1.05, 48]} />
         <meshBasicMaterial
-          color="#e07050"
+          color="#ff8050"
           transparent
-          opacity={0.4}
+          opacity={0.45}
           depthWrite={false}
           toneMapped={false}
+          side={THREE.DoubleSide}
+        />
+      </mesh>
+
+      {/* Enemy multi-frame cast circle (ground) — transparent spokes, spins during wind-up */}
+      <mesh
+        ref={castCircleGround}
+        rotation={[-Math.PI / 2, 0, 0]}
+        position={[0, 0.06, 0]}
+        visible={false}
+        renderOrder={3}
+      >
+        <planeGeometry args={[2.2, 2.2]} />
+        <meshBasicMaterial
+          ref={castCircleMat}
+          map={enemyCastTex}
+          color="#ffb080"
+          transparent
+          opacity={0.65}
+          depthWrite={false}
+          toneMapped={false}
+          blending={THREE.AdditiveBlending}
+          side={THREE.DoubleSide}
+        />
+      </mesh>
+
+      {/* Enemy cast circle facing the player — sits forward of the sprite */}
+      <mesh
+        ref={castCircleFront}
+        position={[0, 1.05, 0.4]}
+        visible={false}
+        renderOrder={14}
+      >
+        <planeGeometry args={[1.6, 1.6]} />
+        <meshBasicMaterial
+          ref={castFrontMat}
+          map={enemyCastTex}
+          color="#ffc090"
+          transparent
+          opacity={0.6}
+          depthWrite={false}
+          toneMapped={false}
+          blending={THREE.AdditiveBlending}
           side={THREE.DoubleSide}
         />
       </mesh>
