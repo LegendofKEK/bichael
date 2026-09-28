@@ -24,7 +24,7 @@ export type WeaponTpPlayer = {
   tp: number;
   level: number;
   job: string;
-  equip: { main: number | null; body: number | null };
+  equip: import("@bellgrave/items").Equipment;
   anim: string;
   animUntil: number;
   recasts: Partial<Record<AbilityId, number>>;

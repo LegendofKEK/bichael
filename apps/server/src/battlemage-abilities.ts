@@ -5,7 +5,6 @@
 import {
   BATTLEMAGE_ABILITIES,
   isBattleMageAbilityId,
-  jobStatsAtLevel,
   type BattleMageAbilityId,
 } from "@bellgrave/combat";
 import { ITEM } from "@bellgrave/config";
@@ -19,7 +18,7 @@ export type BattleMagePlayer = {
   hp: number;
   maxHp: number;
   tp: number;
-  equip: { main: number | null; body: number | null };
+  equip: import("@bellgrave/items").Equipment;
   inventory: { tokenId: number; amount: number }[];
   anim: string;
   animUntil: number;
@@ -90,6 +89,14 @@ export type BattleMageHooks = {
   allPlayers: () => BattleMagePlayer[];
   onMobKill: (p: BattleMagePlayer, m: BattleMageMob, now: number) => void;
   dist: (ax: number, az: number, bx: number, bz: number) => number;
+  playerCombatStats: (p: BattleMagePlayer) => {
+    str: number;
+    dex: number;
+    vit: number;
+    agi: number;
+    int: number;
+    mnd: number;
+  };
 };
 
 function invAmount(inv: BattleMagePlayer["inventory"], tokenId: number): number {
@@ -121,14 +128,13 @@ export function absorbStoneskin(p: BattleMagePlayer, now: number, raw: number): 
   return Math.max(0, raw - absorbed);
 }
 
-function stats(p: BattleMagePlayer) {
-  const lv =
-    p.job === "battle_mage" ? p.level : Math.max(1, Math.floor(p.level / 2));
-  return jobStatsAtLevel("battle_mage", lv);
-}
 
-function elementalNuke(p: BattleMagePlayer, potency: number, corrupt: boolean): number {
-  const { int, str } = stats(p);
+function elementalNuke(
+  potency: number,
+  corrupt: boolean,
+  combatStats: { int: number; str: number },
+): number {
+  const { int, str } = combatStats;
   let base = potency * 0.45 + int * 2.4 + str * 0.25;
   if (corrupt) base *= 1.2;
   return Math.max(1, Math.floor(base));
@@ -154,6 +160,7 @@ export function resolveBattleMageAbility(
   }
 
   const def = BATTLEMAGE_ABILITIES[id];
+  const combatStats = hooks.playerCombatStats(p);
   const effLevel =
     p.job === "battle_mage" ? p.level : Math.max(1, Math.floor(p.level / 2));
   if (def.unlockLevel > effLevel) {
@@ -282,7 +289,7 @@ export function resolveBattleMageAbility(
     }
     spend();
     p.facing = hooks.facingTo(p.x, p.z, m.x, m.z);
-    const bonus = p.enSpellBonus + stats(p).int * 0.5;
+    const bonus = p.enSpellBonus + combatStats.int * 0.5;
     const dmg = Math.max(1, Math.floor((def.potency ?? 200) + bonus * 4));
     m.hp -= dmg;
     p.enSpellUntil = 0;
@@ -310,7 +317,7 @@ export function resolveBattleMageAbility(
   // Self heals
   if (id === "bm_cure" || id === "bm_cure_ii" || id === "bm_cure_iii" || id === "bm_cure_iv") {
     spend();
-    const heal = Math.floor((def.heal ?? 35) + stats(p).mnd * 1.1);
+    const heal = Math.floor((def.heal ?? 35) + combatStats.mnd * 1.1);
     p.hp = Math.min(p.maxHp, p.hp + heal);
     p.anim = "cast";
     p.animUntil = now + castAnimMs;
@@ -394,7 +401,7 @@ export function resolveBattleMageAbility(
         def.label,
         (ally) => {
           ally.stoneskinUntil = now + Math.floor((def.durationMs ?? 300_000) * durMul);
-          ally.stoneskinAbsorb = 80 + stats(p).int * 2;
+          ally.stoneskinAbsorb = 80 + combatStats.int * 2;
         },
         p.widenReady ? 10 : 0,
       );
@@ -460,7 +467,7 @@ export function resolveBattleMageAbility(
   if (def.category === "nuke") {
     spend();
     if (p.spontaneityReady) p.spontaneityReady = false;
-    let dmg = elementalNuke(p, def.potency ?? 40, false);
+    let dmg = elementalNuke(def.potency ?? 40, false, combatStats);
     if (id === "bm_firaga") {
       const r = def.aoe ?? 8;
       let total = 0;
@@ -511,7 +518,7 @@ export function resolveBattleMageAbility(
         hooks.pushLog(p, `${def.label} resisted.`);
         return true;
       }
-      const tick = Math.max(1, Math.floor((def.potency ?? 8) + stats(p).int * 0.15));
+      const tick = Math.max(1, Math.floor((def.potency ?? 8) + combatStats.int * 0.15));
       m.bioUntil = now + dur;
       m.bioTick = tick;
       p.anim = "cast";
@@ -612,7 +619,11 @@ export function clearBattleMageBuffs(p: BattleMagePlayer) {
   p.refreshTick = 0;
 }
 
-export function battleMageEnSpellBonus(p: BattleMagePlayer, now: number): number {
+export function battleMageEnSpellBonus(
+  p: BattleMagePlayer,
+  now: number,
+  intStat: number,
+): number {
   if (now >= p.enSpellUntil) return 0;
-  return p.enSpellBonus + Math.floor(stats(p).int * 0.35);
+  return p.enSpellBonus + Math.floor(intStat * 0.35);
 }

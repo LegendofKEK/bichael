@@ -1,11 +1,10 @@
-/**
- * Sorcerer ability resolution — elemental nuker kit.
+﻿/**
+ * Sorcerer ability resolution â€” elemental nuker kit.
  * Motifs: violet/blue cast windows + per-element impact colors (not TIM teal).
  */
 import {
   SORCERER_ABILITIES,
   isSorcererAbilityId,
-  jobStatsAtLevel,
   type SorcererAbilityId,
   type SorcererElement,
 } from "@bellgrave/combat";
@@ -20,7 +19,7 @@ export type SorcererPlayer = {
   hp: number;
   maxHp: number;
   tp: number;
-  equip: { main: number | null; body: number | null };
+  equip: import("@bellgrave/items").Equipment;
   inventory: { tokenId: number; amount: number }[];
   anim: string;
   animUntil: number;
@@ -37,7 +36,7 @@ export type SorcererPlayer = {
   cascadeUntil: number;
   focalNeveUntil: number;
   enmity: number;
-  /** Last elemental nuke element — for client VFX hue. */
+  /** Last elemental nuke element â€” for client VFX hue. */
   lastScElement: SorcererElement | null;
   scCastFlashUntil: number;
 };
@@ -70,6 +69,14 @@ export type SorcererHooks = {
   allMobs: () => SorcererMob[];
   onMobKill: (p: SorcererPlayer, m: SorcererMob, now: number) => void;
   dist: (ax: number, az: number, bx: number, bz: number) => number;
+  playerCombatStats: (p: SorcererPlayer) => {
+    str: number;
+    dex: number;
+    vit: number;
+    agi: number;
+    int: number;
+    mnd: number;
+  };
 };
 
 function invAmount(inv: SorcererPlayer["inventory"], tokenId: number): number {
@@ -80,19 +87,15 @@ export function staffEquipped(p: SorcererPlayer): boolean {
   return p.equip.main === ITEM.STAFF_ASHBEAM && invAmount(p.inventory, ITEM.STAFF_ASHBEAM) > 0;
 }
 
-function stats(p: SorcererPlayer) {
-  const lv =
-    p.job === "sorcerer" ? p.level : Math.max(1, Math.floor(p.level / 2));
-  return jobStatsAtLevel("sorcerer", lv);
-}
 
 function elementalDamage(
   p: SorcererPlayer,
   potency: number,
   now: number,
   cascadeBonus: boolean,
+  combatStats: { int: number; mnd: number },
 ): number {
-  const { int, mnd } = stats(p);
+  const { int, mnd } = combatStats;
   let base = potency * 0.52 + int * 2.85 + mnd * 0.35;
   if (now < p.elementalSealUntil) base *= 1.45;
   if (now < p.focalNeveUntil) base *= 1.22;
@@ -153,6 +156,7 @@ export function resolveSorcererAbility(
   }
 
   const def = SORCERER_ABILITIES[id];
+  const combatStats = hooks.playerCombatStats(p);
   const effLevel =
     p.job === "sorcerer" ? p.level : Math.max(1, Math.floor(p.level / 2));
   if (effLevel < def.unlockLevel) {
@@ -197,14 +201,14 @@ export function resolveSorcererAbility(
     return true;
   }
 
-  // —— Job abilities ——
+  // â€”â€” Job abilities â€”â€”
   if (id === "arcane_flood") {
     payRecast();
     p.arcaneFloodUntil = now + (def.durationMs ?? 60_000);
     p.scCastFlashUntil = now + 1200;
     p.anim = "cast";
     p.animUntil = now + 700;
-    hooks.pushLog(p, `${def.label} — the neve opens; cast without cost!`);
+    hooks.pushLog(p, `${def.label} â€” the neve opens; cast without cost!`);
     return true;
   }
   if (id === "elemental_seal") {
@@ -212,7 +216,7 @@ export function resolveSorcererAbility(
     p.elementalSealUntil = now + (def.durationMs ?? 60_000);
     p.anim = "cast";
     p.animUntil = now + 550;
-    hooks.pushLog(p, `${def.label} — the next element obeys.`);
+    hooks.pushLog(p, `${def.label} â€” the next element obeys.`);
     return true;
   }
   if (id === "mana_wall") {
@@ -220,7 +224,7 @@ export function resolveSorcererAbility(
     p.manaWallUntil = now + (def.durationMs ?? 60_000);
     p.anim = "cast";
     p.animUntil = now + 500;
-    hooks.pushLog(p, `${def.label} — mana becomes your bulwark.`);
+    hooks.pushLog(p, `${def.label} â€” mana becomes your bulwark.`);
     return true;
   }
   if (id === "manawell") {
@@ -228,7 +232,7 @@ export function resolveSorcererAbility(
     p.manawellReady = true;
     p.anim = "cast";
     p.animUntil = now + 450;
-    hooks.pushLog(p, `${def.label} — the next spell is free.`);
+    hooks.pushLog(p, `${def.label} â€” the next spell is free.`);
     return true;
   }
   if (id === "enmity_douse") {
@@ -239,7 +243,7 @@ export function resolveSorcererAbility(
     }
     p.anim = "cast";
     p.animUntil = now + 400;
-    hooks.pushLog(p, `${def.label} — hate washes away.`);
+    hooks.pushLog(p, `${def.label} â€” hate washes away.`);
     return true;
   }
   if (id === "cascade") {
@@ -247,7 +251,7 @@ export function resolveSorcererAbility(
     p.cascadeUntil = now + (def.durationMs ?? 30_000);
     p.anim = "cast";
     p.animUntil = now + 450;
-    hooks.pushLog(p, `${def.label} — chain the next burst!`);
+    hooks.pushLog(p, `${def.label} â€” chain the next burst!`);
     return true;
   }
   if (id === "focal_neve") {
@@ -256,7 +260,7 @@ export function resolveSorcererAbility(
     p.scCastFlashUntil = now + 1000;
     p.anim = "cast";
     p.animUntil = now + 600;
-    hooks.pushLog(p, `${def.label} — INT surges through the neve.`);
+    hooks.pushLog(p, `${def.label} â€” INT surges through the neve.`);
     return true;
   }
 
@@ -272,7 +276,7 @@ export function resolveSorcererAbility(
     p.targetId = null;
     p.anim = "cast";
     p.animUntil = now + 800;
-    hooks.pushLog(p, `${def.label} — you blink to the hall mouth.`);
+    hooks.pushLog(p, `${def.label} â€” you blink to the hall mouth.`);
     return true;
   }
   if (id === "sc_ash_escape") {
@@ -285,11 +289,11 @@ export function resolveSorcererAbility(
     p.moveTo = null;
     p.anim = "cast";
     p.animUntil = now + 500;
-    hooks.pushLog(p, `${def.label} — you slip back from the fray.`);
+    hooks.pushLog(p, `${def.label} â€” you slip back from the fray.`);
     return true;
   }
 
-  // —— Elemental nukes ——
+  // â€”â€” Elemental nukes â€”â€”
   if (def.category === "elemental" && def.potency != null && def.element) {
     const cascadeBonus = now < p.cascadeUntil;
     if (cascadeBonus) p.cascadeUntil = 0;
@@ -314,14 +318,14 @@ export function resolveSorcererAbility(
       p.scCastFlashUntil = now + 650;
       p.anim = "cast";
       p.animUntil = now + 620;
-      const dmg = elementalDamage(p, def.potency, now, cascadeBonus);
+      const dmg = elementalDamage(p, def.potency, now, cascadeBonus, combatStats);
       let hits = 0;
       for (const m of mobsInRadius(hooks.allMobs(), cx, cz, def.aoe)) {
         applyNukeHit(p, m, dmg, def.element, now);
         hits += 1;
         if (m.hp <= 0) hooks.onMobKill(p, m, now);
       }
-      hooks.pushLog(p, `${def.label} — ${dmg} on ${hits} foe(s)!`);
+      hooks.pushLog(p, `${def.label} â€” ${dmg} on ${hits} foe(s)!`);
       return true;
     }
 
@@ -346,14 +350,14 @@ export function resolveSorcererAbility(
     p.scCastFlashUntil = now + 650;
     p.anim = "cast";
     p.animUntil = now + 580;
-    const dmg = elementalDamage(p, def.potency, now, cascadeBonus);
+    const dmg = elementalDamage(p, def.potency, now, cascadeBonus, combatStats);
     applyNukeHit(p, m, dmg, def.element, now);
-    hooks.pushLog(p, `${def.label} — ${dmg} on ${m.name ?? "foe"}!`);
+    hooks.pushLog(p, `${def.label} â€” ${dmg} on ${m.name ?? "foe"}!`);
     if (m.hp <= 0) hooks.onMobKill(p, m, now);
     return true;
   }
 
-  // —— Enfeebles / dark ——
+  // â€”â€” Enfeebles / dark â€”â€”
   const tid = targetId ?? p.targetId;
   const mob = hooks.findMob(tid);
   if ((def.needsTarget || def.category === "enfeeble" || def.category === "dark") && def.category !== "travel") {
@@ -376,7 +380,7 @@ export function resolveSorcererAbility(
 
     if (id === "sc_morrow_sleep") {
       mob.sleepUntil = now + (def.durationMs ?? 45_000);
-      hooks.pushLog(p, `${def.label} — ${mob.name ?? "foe"} slumbers.`);
+      hooks.pushLog(p, `${def.label} â€” ${mob.name ?? "foe"} slumbers.`);
       return true;
     }
     if (id === "sc_morrow_slumber") {
@@ -386,17 +390,17 @@ export function resolveSorcererAbility(
         m.sleepUntil = now + (def.durationMs ?? 30_000);
         n += 1;
       }
-      hooks.pushLog(p, `${def.label} — ${n} foe(s) fall asleep.`);
+      hooks.pushLog(p, `${def.label} â€” ${n} foe(s) fall asleep.`);
       return true;
     }
     if (id === "sc_mist_blind") {
       mob.blindUntil = now + (def.durationMs ?? 90_000);
-      hooks.pushLog(p, `${def.label} — ${mob.name ?? "foe"} is blinded.`);
+      hooks.pushLog(p, `${def.label} â€” ${mob.name ?? "foe"} is blinded.`);
       return true;
     }
     if (id === "sc_root_sigil") {
       mob.bindUntil = now + (def.durationMs ?? 60_000);
-      hooks.pushLog(p, `${def.label} — roots hold ${mob.name ?? "foe"}.`);
+      hooks.pushLog(p, `${def.label} â€” roots hold ${mob.name ?? "foe"}.`);
       return true;
     }
     if (id === "sc_unweave") {
@@ -405,7 +409,7 @@ export function resolveSorcererAbility(
         mob.falseGuardUntil = 0;
         stripped += 1;
       }
-      // Clear residual impact flashes / defensive feints only — not your enfeebles
+      // Clear residual impact flashes / defensive feints only â€” not your enfeebles
       if (mob.scImpactUntil > now) {
         mob.scImpactUntil = 0;
         mob.scImpactElement = null;
@@ -414,42 +418,42 @@ export function resolveSorcererAbility(
       hooks.pushLog(
         p,
         stripped > 0
-          ? `${def.label} — buffs stripped from ${mob.name ?? "foe"}.`
-          : `${def.label} — nothing to unravel on ${mob.name ?? "foe"}.`,
+          ? `${def.label} â€” buffs stripped from ${mob.name ?? "foe"}.`
+          : `${def.label} â€” nothing to unravel on ${mob.name ?? "foe"}.`,
       );
       return true;
     }
     if (id === "sc_life_leech") {
-      const dmg = elementalDamage(p, def.potency ?? 45, now, false);
+      const dmg = elementalDamage(p, def.potency ?? 45, now, false, combatStats);
       mob.hp = Math.max(0, mob.hp - dmg);
       const heal = Math.floor(dmg * 0.6);
       p.hp = Math.min(p.maxHp, p.hp + heal);
       mob.scImpactUntil = now + 700;
       mob.scImpactElement = "dark";
-      hooks.pushLog(p, `${def.label} — ${dmg} drained, +${heal} HP.`);
+      hooks.pushLog(p, `${def.label} â€” ${dmg} drained, +${heal} HP.`);
       if (mob.hp <= 0) hooks.onMobKill(p, mob, now);
       return true;
     }
     if (id === "sc_mana_siphon") {
-      const want = Math.min(40, Math.max(8, Math.floor(stats(p).int * 0.8)));
+      const want = Math.min(40, Math.max(8, Math.floor(combatStats.int * 0.8)));
       const available = typeof mob.mp === "number" ? mob.mp : 0;
       const drain = Math.min(want, available);
       if (drain <= 0) {
-        hooks.pushLog(p, `${def.label} — no mana to siphon.`);
+        hooks.pushLog(p, `${def.label} â€” no mana to siphon.`);
         return true;
       }
       mob.mp = available - drain;
       p.mp = Math.min(p.maxMp, p.mp + drain);
-      hooks.pushLog(p, `${def.label} — siphoned ${drain} MP.`);
+      hooks.pushLog(p, `${def.label} â€” siphoned ${drain} MP.`);
       return true;
     }
     if (id === "sc_gloom_stun") {
-      const dmg = Math.floor(elementalDamage(p, 35, now, false) * 0.5);
+      const dmg = Math.floor(elementalDamage(p, 35, now, false, combatStats) * 0.5);
       mob.hp = Math.max(0, mob.hp - dmg);
       mob.stunUntil = now + (def.durationMs ?? 5_000);
       mob.scImpactUntil = now + 800;
       mob.scImpactElement = "dark";
-      hooks.pushLog(p, `${def.label} — ${dmg} and stun!`);
+      hooks.pushLog(p, `${def.label} â€” ${dmg} and stun!`);
       if (mob.hp <= 0) hooks.onMobKill(p, mob, now);
       return true;
     }

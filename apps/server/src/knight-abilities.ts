@@ -5,7 +5,6 @@
 import {
   KNIGHT_ABILITIES,
   isKnightAbilityId,
-  jobStatsAtLevel,
   type KnightAbilityId,
 } from "@bellgrave/combat";
 import { ITEM } from "@bellgrave/config";
@@ -19,7 +18,7 @@ export type KnightPlayer = {
   hp: number;
   maxHp: number;
   tp: number;
-  equip: { main: number | null; body: number | null };
+  equip: import("@bellgrave/items").Equipment;
   inventory: { tokenId: number; amount: number }[];
   anim: string;
   animUntil: number;
@@ -67,6 +66,14 @@ export type KnightHooks = {
   allPlayers: () => KnightPlayer[];
   onMobKill: (p: KnightPlayer, m: KnightMob, now: number) => void;
   dist: (ax: number, az: number, bx: number, bz: number) => number;
+  playerCombatStats: (p: KnightPlayer) => {
+    str: number;
+    dex: number;
+    vit: number;
+    agi: number;
+    int: number;
+    mnd: number;
+  };
 };
 
 function invAmount(inv: KnightPlayer["inventory"], tokenId: number): number {
@@ -107,8 +114,8 @@ function pullMob(p: KnightPlayer, m: KnightMob, amount: number) {
   m.targetId = (p as { wallet?: string }).wallet ?? m.targetId;
 }
 
-function divineNuke(p: KnightPlayer, potency: number): number {
-  const { mnd, str } = jobStatsAtLevel("knight", p.level);
+function divineNuke(p: KnightPlayer, potency: number, stats: { mnd: number; str: number }): number {
+  const { mnd, str } = stats;
   return Math.max(1, Math.floor(potency * 0.35 + mnd * 2.2 + str * 0.4));
 }
 
@@ -133,6 +140,8 @@ export function resolveKnightAbility(
     hooks.pushLog(p, `${def.label} unlocks at level ${def.unlockLevel}.`);
     return true;
   }
+
+  const combatStats = hooks.playerCombatStats(p);
 
   const readyAt = p.recasts[id] ?? 0;
   if (now < readyAt) {
@@ -218,7 +227,7 @@ export function resolveKnightAbility(
     }
     spend();
     p.facing = hooks.facingTo(p.x, p.z, m.x, m.z);
-    const { str, vit } = jobStatsAtLevel("knight", p.level);
+    const { str, vit } = combatStats;
     const dmg = Math.max(1, Math.floor((def.potency ?? 28) + str * 0.8 + vit * 0.3));
     m.hp -= dmg;
     m.stunUntil = now + (def.durationMs ?? 5_000);
@@ -313,7 +322,7 @@ export function resolveKnightAbility(
   // —— Cures ——
   if (id === "kn_cure" || id === "kn_cure_ii" || id === "kn_cure_iii" || id === "kn_cure_iv") {
     spend();
-    const heal = Math.floor((def.heal ?? 45) + jobStatsAtLevel("knight", p.level).mnd * 1.5);
+    const heal = Math.floor((def.heal ?? 45) + combatStats.mnd * 1.5);
     p.hp = Math.min(p.maxHp, p.hp + heal);
     p.anim = "cast";
     p.animUntil = now + 500;
@@ -378,7 +387,7 @@ export function resolveKnightAbility(
     }
     spend();
     p.facing = hooks.facingTo(p.x, p.z, m.x, m.z);
-    const dmg = divineNuke(p, def.potency ?? 55);
+    const dmg = divineNuke(p, def.potency ?? 55, combatStats);
     m.hp -= dmg;
     m.targetId = p.wallet;
     spikeEnmity(p, id === "kn_holy" ? 1200 : 450);

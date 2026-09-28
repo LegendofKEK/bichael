@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@bellgrave/combat": "workspace:*",
+    "@bellgrave/items": "workspace:*",
     "zod": "^3.24.2"
   },
   "devDependencies": {

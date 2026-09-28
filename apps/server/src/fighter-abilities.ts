@@ -12,8 +12,6 @@ import {
 
   isFighterAbilityId,
 
-  jobStatsAtLevel,
-
 } from "@bellgrave/combat";
 
 import { ITEM } from "@bellgrave/config";
@@ -36,7 +34,7 @@ export type FighterPlayer = {
 
   tp: number;
 
-  equip: { main: number | null; body: number | null };
+  equip: import("@bellgrave/items").Equipment;
 
   inventory: { tokenId: number; amount: number }[];
 

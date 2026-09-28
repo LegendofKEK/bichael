@@ -129,6 +129,9 @@ importers:
       '@bellgrave/combat':
         specifier: workspace:*
         version: link:../combat
+      '@bellgrave/items':
+        specifier: workspace:*
+        version: link:../items
       zod:
         specifier: ^3.24.2
         version: 3.25.76

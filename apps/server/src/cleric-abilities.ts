@@ -5,7 +5,6 @@
 import {
   CLERIC_ABILITIES,
   isClericAbilityId,
-  jobStatsAtLevel,
   type ClericAbilityId,
 } from "@bellgrave/combat";
 import { ITEM } from "@bellgrave/config";
@@ -20,7 +19,7 @@ export type ClericPlayer = {
   hp: number;
   maxHp: number;
   tp: number;
-  equip: { main: number | null; body: number | null };
+  equip: import("@bellgrave/items").Equipment;
   inventory: { tokenId: number; amount: number }[];
   anim: string;
   animUntil: number;
@@ -81,6 +80,14 @@ export type ClericHooks = {
   allPlayers: () => ClericPlayer[];
   onMobKill: (p: ClericPlayer, m: ClericMob, now: number) => void;
   dist: (ax: number, az: number, bx: number, bz: number) => number;
+  playerCombatStats: (p: ClericPlayer) => {
+    str: number;
+    dex: number;
+    vit: number;
+    agi: number;
+    int: number;
+    mnd: number;
+  };
 };
 
 function invAmount(inv: ClericPlayer["inventory"], tokenId: number): number {
@@ -123,17 +130,15 @@ export function absorbHealShield(p: ClericPlayer, now: number, raw: number): num
   return Math.max(0, raw - soaked);
 }
 
-function healPower(p: ClericPlayer, base: number, double: boolean): number {
-  const lv = p.job === "cleric" ? p.level : Math.max(1, Math.floor(p.level / 2));
-  const { mnd } = jobStatsAtLevel("cleric", lv);
+function healPower(p: ClericPlayer, base: number, double: boolean, stats: { mnd: number }): number {
+  const { mnd } = stats;
   let amt = Math.floor(base + mnd * 2.8);
   if (double) amt *= 2;
   return Math.max(1, amt);
 }
 
-function divineNuke(p: ClericPlayer, potency: number, double: boolean): number {
-  const lv = p.job === "cleric" ? p.level : Math.max(1, Math.floor(p.level / 2));
-  const { mnd } = jobStatsAtLevel("cleric", lv);
+function divineNuke(p: ClericPlayer, potency: number, double: boolean, stats: { mnd: number }): number {
+  const { mnd } = stats;
   let dmg = Math.max(1, Math.floor(potency * 0.4 + mnd * 2.5));
   if (double) dmg *= 2;
   return dmg;
@@ -201,6 +206,7 @@ export function resolveClericAbility(
   }
 
   const def = CLERIC_ABILITIES[id];
+  const combatStats = hooks.playerCombatStats(p);
   const effLevel =
     p.job === "cleric" ? p.level : Math.max(1, Math.floor(p.level / 2));
   if (def.unlockLevel > effLevel) {
@@ -294,8 +300,7 @@ export function resolveClericAbility(
     p.martyrReadyUntil = now + (def.durationMs ?? 30_000);
     const sacrifice = Math.floor(p.maxHp * 0.15);
     p.hp = Math.max(1, p.hp - sacrifice);
-    const lv = p.job === "cleric" ? p.level : Math.max(1, Math.floor(p.level / 2));
-    const heal = sacrifice + Math.floor(jobStatsAtLevel("cleric", lv).mnd * 2);
+    const heal = sacrifice + Math.floor(combatStats.mnd * 2);
     applyHeal(p, ally, heal, now, hooks, def.label);
     p.anim = "cast";
     p.animUntil = now + 600;
@@ -312,8 +317,7 @@ export function resolveClericAbility(
     p.devotionReadyUntil = now + 5_000;
     const hpCost = Math.floor(p.maxHp * 0.1);
     p.hp = Math.max(1, p.hp - hpCost);
-    const lv = p.job === "cleric" ? p.level : Math.max(1, Math.floor(p.level / 2));
-    const mpGain = Math.floor(hpCost * 0.8 + jobStatsAtLevel("cleric", lv).mnd * 0.5);
+    const mpGain = Math.floor(hpCost * 0.8 + combatStats.mnd * 0.5);
     ally.mp = Math.min(ally.maxMp, ally.mp + mpGain);
     p.anim = "cast";
     p.animUntil = now + 550;
@@ -348,7 +352,7 @@ export function resolveClericAbility(
     spend();
     const ally = resolveAlly(p, targetId, hooks, def.range ?? 12);
     const double = consumeDivineSeal(p);
-    const heal = healPower(p, def.heal ?? 58, double);
+    const heal = healPower(p, def.heal ?? 58, double, combatStats);
     applyHeal(p, ally, heal, now, hooks, def.label);
     p.anim = "cast";
     p.animUntil = now + 520;
@@ -363,7 +367,7 @@ export function resolveClericAbility(
     let hit = 0;
     for (const ally of hooks.allPlayers()) {
       if (hooks.dist(p.x, p.z, ally.x, ally.z) > r) continue;
-      const amt = healPower(p, base, false);
+      const amt = healPower(p, base, false, combatStats);
       applyHeal(p, ally, amt, now, hooks, def.label);
       hit++;
     }
@@ -465,7 +469,7 @@ export function resolveClericAbility(
   if (id === "cl_raise" || id === "cl_raise_ii") {
     const ally = resolveAlly(p, targetId, hooks, def.range ?? 12);
     spend();
-    const heal = healPower(p, def.heal ?? 200, false);
+    const heal = healPower(p, def.heal ?? 200, false, combatStats);
     ally.hp = Math.min(ally.maxHp, Math.max(1, heal));
     ally.sacredLightUntil = now + 2200;
     p.sacredLightUntil = now + 2200;
@@ -516,7 +520,7 @@ export function resolveClericAbility(
     spend();
     p.facing = hooks.facingTo(p.x, p.z, m.x, m.z);
     const double = consumeDivineSeal(p);
-    const dmg = divineNuke(p, def.potency ?? 65, double);
+    const dmg = divineNuke(p, def.potency ?? 65, double, combatStats);
     m.hp -= dmg;
     p.sacredLightUntil = now + 800;
     p.anim = "cast";

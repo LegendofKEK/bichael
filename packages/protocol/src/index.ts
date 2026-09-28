@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { EQUIP_SLOTS, type Equipment } from "@bellgrave/items";
 import {
   ALL_ABILITY_IDS,
   JOB_IDS,
@@ -12,8 +13,9 @@ export type JobId = CombatJobId;
 export const AbilityId = z.enum(ALL_ABILITY_IDS as unknown as [CombatAbilityId, ...CombatAbilityId[]]);
 export const JobId = z.enum(JOB_IDS as unknown as [CombatJobId, ...CombatJobId[]]);
 
-export const EquipSlot = z.enum(["main", "body"]);
+export const EquipSlot = z.enum(EQUIP_SLOTS);
 export type EquipSlot = z.infer<typeof EquipSlot>;
+export type { Equipment };
 
 export const Vec2Schema = z.object({ x: z.number(), z: z.number() });
 export type Vec2 = z.infer<typeof Vec2Schema>;
@@ -220,7 +222,7 @@ export type SnapshotMessage = {
     dust: number;
     claimedStarter: boolean;
     inventory: InventorySlot[];
-    equip: { main: number | null; body: number | null };
+    equip: Equipment;
     /** Base precursor mats (Pale Hollow gather/drops) — NFT-bound later. */
     baseMats: Record<string, number>;
     /** Craft skill ranks (smithing, cooking, …). */

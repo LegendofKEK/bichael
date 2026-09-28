@@ -12,11 +12,10 @@ import {
   SKILL_NODES,
   abilitiesUnlockedDual,
   aggregateSkillBonuses,
-  applyFreeStats,
   attackFromStats,
   canUnlockSkillNode,
-  combinedJobStats,
   combinedJobVitals,
+  deriveCharacterAttributes,
   defenseFromVit,
   effectiveJobLevel,
   evasionFromAgi,
@@ -81,10 +80,24 @@ import {
   paleHollowPlaceOnDryLand,
   paleHollowWalkable,
 } from "@bellgrave/config";
-import { CATALOG_BY_SLUG, craftXpToNext, emptyCraftSkills, getCraftableItem, ownedMatQty, pickAffordableMaterials, recipeMaterials, type CraftSkill } from "@bellgrave/items";
+import {
+  CATALOG_BY_SLUG,
+  aggregateEquipmentStats,
+  craftXpToNext,
+  emptyCraftSkills,
+  emptyEquipment,
+  getCraftableItem,
+  getItem,
+  ownedMatQty,
+  pickAffordableMaterials,
+  recipeMaterials,
+  type CraftSkill,
+  type ItemDef,
+} from "@bellgrave/items";
 import { createPaleHollowMobs, createPaleHollowNodes, relocateGatherNode, type FieldNode } from "./pale-hollow-world";
 import type {
   AbilityId,
+  Equipment,
   EquipSlot,
   InventorySlot,
   ServerMessage,
@@ -135,7 +148,7 @@ type Player = {
   dust: number;
   claimedStarter: boolean;
   inventory: InventorySlot[];
-  equip: { main: number | null; body: number | null };
+  equip: Equipment;
   x: number;
   y: number;
   z: number;
@@ -1073,6 +1086,7 @@ function ensurePlayer(wallet: string, ws: WebSocket): Player | undefined {
   if (!p.zoneId) p.zoneId = "pale_hollow";
   if (!p.baseMats || typeof p.baseMats !== "object") p.baseMats = {};
   ensureCraftSkills(p);
+  p.equip = { ...emptyEquipment(), ...(p.equip ?? {}) };
   ensureSkillPointBank(p);
   registerAccountChar(p);
   return p;
@@ -1145,7 +1159,7 @@ function createPlayer(
     dust: 0,
     claimedStarter: false,
     inventory: [],
-    equip: { main: null, body: null },
+    equip: emptyEquipment(),
     x: PH_HUB_SPAWN.x,
     y: paleHollowHeight(PH_HUB_SPAWN.x, PH_HUB_SPAWN.z),
     z: PH_HUB_SPAWN.z,
@@ -1258,12 +1272,17 @@ function createPlayer(
   return p;
 }
 
-/** Recompute max HP/MP from job grades at current level; optionally refill. */
+function playerEquipmentStats(p: Player) {
+  return aggregateEquipmentStats(p.equip);
+}
+
+/** Recompute max HP/MP from job, skill-tree, and equipped catalog bonuses. */
 function syncVitals(p: Player, refill = true) {
   const v = combinedJobVitals(p.job, p.level, p.subjob);
   const tree = aggregateSkillBonuses(p.skillUnlocked);
-  p.maxHp = v.maxHp + tree.maxHp;
-  p.maxMp = v.maxMp === 0 ? 0 : v.maxMp + tree.maxMp;
+  const gear = playerEquipmentStats(p);
+  p.maxHp = v.maxHp + tree.maxHp + (gear.hp ?? 0);
+  p.maxMp = v.maxMp === 0 ? 0 : v.maxMp + tree.maxMp + (gear.mp ?? 0);
   if (refill) {
     p.hp = p.maxHp;
     p.mp = p.maxMp;
@@ -1274,17 +1293,22 @@ function syncVitals(p: Player, refill = true) {
 }
 
 function playerCombatStats(p: Player) {
-  const base = combinedJobStats(p.job, p.level, p.subjob);
-  const tree = aggregateSkillBonuses(p.skillUnlocked);
-  const withTree = {
-    str: base.str + tree.str,
-    dex: base.dex + tree.dex,
-    vit: base.vit + tree.vit,
-    agi: base.agi + tree.agi,
-    int: base.int + tree.int,
-    mnd: base.mnd + tree.mnd,
+  const derived = deriveCharacterAttributes(
+    p.job,
+    p.level,
+    p.subjob,
+    p.skillUnlocked,
+    p.freeStats,
+  );
+  const gear = playerEquipmentStats(p);
+  return {
+    str: derived.total.str + (gear.str ?? 0),
+    dex: derived.total.dex + (gear.dex ?? 0),
+    vit: derived.total.vit + (gear.vit ?? 0),
+    agi: derived.total.agi + (gear.agi ?? 0),
+    int: derived.total.int + (gear.int ?? 0),
+    mnd: derived.total.mnd + (gear.mnd ?? 0),
   };
-  return applyFreeStats(withTree, p.freeStats);
 }
 
 function playerTreeBonuses(p: Player) {
@@ -1486,8 +1510,7 @@ function absorbManaWall(p: Player, now: number, raw: number): { dmg: number; ble
 
 function playerWeaponBonus(p: Player): number {
   if (!p.equip.main) return 0;
-  if (p.equip.main === ITEM.GREATSWORD_IRON) return 14;
-  return 10;
+  return playerEquipmentStats(p).atk ?? 10;
 }
 
 function handleAbility(p: Player, id: AbilityId, targetId?: string) {
@@ -1522,6 +1545,7 @@ function handleAbility(p: Player, id: AbilityId, targetId?: string) {
         if (mob) rewardMobKill(pl as Player, mob, now);
       },
       dist,
+      playerCombatStats: (pl) => playerCombatStats(pl as Player),
     });
     return;
   }
@@ -1538,6 +1562,7 @@ function handleAbility(p: Player, id: AbilityId, targetId?: string) {
         if (mob) rewardMobKill(pl as Player, mob, now);
       },
       dist,
+      playerCombatStats: (pl) => playerCombatStats(pl as Player),
     });
     return;
   }
@@ -1564,6 +1589,7 @@ function handleAbility(p: Player, id: AbilityId, targetId?: string) {
         if (mob) rewardMobKill(pl as Player, mob, now);
       },
       dist,
+      playerCombatStats: (pl) => playerCombatStats(pl as Player),
     });
     return;
   }
@@ -1580,6 +1606,7 @@ function handleAbility(p: Player, id: AbilityId, targetId?: string) {
         if (mob) rewardMobKill(pl as Player, mob, now);
       },
       dist,
+      playerCombatStats: (pl) => playerCombatStats(pl as Player),
     });
     return;
   }
@@ -1596,6 +1623,7 @@ function handleAbility(p: Player, id: AbilityId, targetId?: string) {
         if (mob) rewardMobKill(pl as unknown as Player, mob, now);
       },
       dist,
+      playerCombatStats: (pl) => playerCombatStats(pl as unknown as Player),
     });
     return;
   }
@@ -1610,6 +1638,7 @@ function handleAbility(p: Player, id: AbilityId, targetId?: string) {
       },
       allPlayers: () => [...players.values()],
       dist,
+      playerCombatStats: (pl) => playerCombatStats(pl as Player),
     });
     return;
   }
@@ -1960,13 +1989,27 @@ function handleSubjob(p: Player, job: JobId | null) {
   handleNpcInteract(p, JOB_MASTER.id);
 }
 
+function itemJobKey(job: JobId): string {
+  if (job === "time_mage") return "tim";
+  if (job === "battle_mage") return "battlemage";
+  return job;
+}
+
+function canJobEquip(p: Player, def: ItemDef): boolean {
+  if (!def.jobRestrict || def.jobRestrict === "all") return true;
+  const jobs = new Set(def.jobRestrict);
+  return jobs.has(itemJobKey(p.job) as never) || (!!p.subjob && jobs.has(itemJobKey(p.subjob) as never));
+}
+
 function handleEquip(p: Player, slot: EquipSlot, tokenId: number | null) {
   if (tokenId === null) {
     p.equip[slot] = null;
     if (slot === "main") {
+      p.equip.grip = null;
       p.flux = false;
       p.aether = false;
     }
+    syncVitals(p, false);
     pushLog(p, `Unequipped ${slot}.`);
     return;
   }
@@ -1974,28 +2017,33 @@ function handleEquip(p: Player, slot: EquipSlot, tokenId: number | null) {
     pushLog(p, "You do not own that item.");
     return;
   }
-  if (
-    slot === "main" &&
-    tokenId !== ITEM.STAFF_ASHBEAM &&
-    tokenId !== ITEM.SWORD_IRON &&
-    tokenId !== ITEM.DAGGER_IRON &&
-    tokenId !== ITEM.GREATSWORD_IRON
-  ) {
-    pushLog(p, "That weapon cannot equip in main.");
+  const def = getItem(tokenId);
+  if (!def || def.kind !== "equipment" || def.slot !== slot) {
+    pushLog(p, `That item cannot equip in ${slot}.`);
     return;
   }
-  if (
-    slot === "body" &&
-    tokenId !== ITEM.ROBE_LINEN &&
-    tokenId !== ITEM.MAIL_IRON &&
-    tokenId !== ITEM.LEATHER_VEST &&
-    tokenId !== ITEM.SCALE_HARNESS
-  ) {
-    pushLog(p, "That armor cannot equip on body.");
+  if (!canJobEquip(p, def)) {
+    pushLog(p, `${def.name} cannot be equipped by your main or support job.`);
     return;
   }
+
+  const main = slot === "main" ? def : p.equip.main ? getItem(p.equip.main) : undefined;
+  if (slot === "sub" && main?.twoHand) {
+    pushLog(p, "A two-handed main weapon cannot be used with a sub item.");
+    return;
+  }
+  if (slot === "grip" && !main?.twoHand) {
+    pushLog(p, "A grip requires a two-handed main weapon.");
+    return;
+  }
+  if (slot === "main") {
+    if (def.twoHand) p.equip.sub = null;
+    else p.equip.grip = null;
+  }
+
   p.equip[slot] = tokenId;
-  pushLog(p, `Equipped ${slot}.`);
+  syncVitals(p, false);
+  pushLog(p, `Equipped ${def.name} on ${slot}.`);
 }
 
 function handleUseItem(p: Player, tokenId: number) {
@@ -2066,7 +2114,7 @@ function playerSwing(p: Player, now: number) {
   }
   let def = defenseFromVit(GUARD_L1.vit);
   if (now < mob.diaUntil) def = Math.max(1, Math.floor(def * 0.7));
-  let acc = stats.dex + 40 + tree.acc - (now < mob.distractUntil ? mob.distractAcc : 0);
+  let acc = stats.dex + 40 + tree.acc + (playerEquipmentStats(p).acc ?? 0) - (now < mob.distractUntil ? mob.distractAcc : 0);
   if (physical && playerHasJob(p, "fighter")) acc += fighterAccBonus(p, now);
   let eva = evasionFromAgi(GUARD_L1.agi);
   if (now < mob.falseGuardUntil) eva = Math.max(0, eva - 18);
@@ -2121,7 +2169,7 @@ function playerSwing(p: Player, now: number) {
   }
   if (now < p.perpetualUntil) dmg = Math.floor(dmg * 1.15);
   if (playerHasJob(p, "battle_mage")) {
-    dmg += battleMageEnSpellBonus(p, now);
+    dmg += battleMageEnSpellBonus(p, now, playerCombatStats(p).int);
   }
   mob.hp -= dmg;
   if (now < mob.sleepUntil) mob.sleepUntil = 0;
@@ -2246,7 +2294,7 @@ function mobSwing(mob: Mob, now: number) {
   mob.animUntil = now + 480;
   const defStats = playerCombatStats(nearest);
   const mobAcc = GUARD_L1.dex + 40;
-  let playerEva = evasionFromAgi(defStats.agi);
+  let playerEva = evasionFromAgi(defStats.agi) + (playerEquipmentStats(nearest).eva ?? 0);
   playerEva = Math.max(0, playerEva - fighterEvaPenalty(nearest, now));
   if (Math.random() > hitChance(mobAcc, playerEva)) {
     pushLog(nearest, `${mob.name} misses you.`);
@@ -2259,7 +2307,7 @@ function mobSwing(mob: Mob, now: number) {
         (now < mob.atkDownUntil ? mob.atkDownMul || 1 : 1),
     ),
   );
-  const def = defenseFromVit(defStats.vit) + (nearest.equip.body ? 4 : 0);
+  const def = defenseFromVit(defStats.vit) + (playerEquipmentStats(nearest).def ?? 0);
   let dmg = physicalDamage(att, def, fStr(GUARD_L1.str, defStats.vit), false);
   if (now < mob.addleUntil) dmg = Math.max(1, Math.floor(dmg * 0.65));
   // Terrain-tied pressure: slimes hit harder in water; adders on vine cliffs
