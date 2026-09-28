@@ -47,6 +47,7 @@ export type MobJobCombatant = {
   atkDownUntil: number;
   atkDownMul: number;
   addleUntil: number;
+  silenceUntil: number;
   slowUntil: number;
   swingPenalty: number;
 };
@@ -190,8 +191,19 @@ export function tryMobJobAbility(mob: MobJobCombatant, hooks: MobAbilityHooks): 
   if (Math.random() > 0.38) return { ok: false };
 
   const picks = JOB_ABILITIES[mob.job] ?? [];
+  const silenced = now < mob.silenceUntil;
+  // Spells are muted; melee JAs / Berserk still fire.
+  const CAST_IDS: ReadonlySet<MobAbilityId> = new Set([
+    "mob_ember_bolt",
+    "mob_slow",
+    "mob_mend",
+  ]);
   const ready = picks.filter(
-    (a) => dist >= a.minRange && dist <= a.maxRange && mob.mp >= a.mp,
+    (a) =>
+      dist >= a.minRange &&
+      dist <= a.maxRange &&
+      mob.mp >= a.mp &&
+      !(silenced && CAST_IDS.has(a.id)),
   );
   if (ready.length === 0) return { ok: false };
   // Prefer self-heal when hurt
@@ -302,7 +314,6 @@ export function tryMobJobAbility(mob: MobJobCombatant, hooks: MobAbilityHooks): 
       const power = Math.max(1, Math.floor((stats.int * 1.4 + stats.mnd * 0.4 + mob.level * 1.5) * atkMul * downMul));
       const resist = Math.floor(vitals.vit * 0.35);
       let dmg = Math.max(1, power - resist + 6);
-      if (now < mob.addleUntil) dmg = Math.max(1, Math.floor(dmg * 0.65));
       mob.anim = "cast";
       mob.animUntil = now + MOB_CAST_ANIM_MS;
       mob.nextSwingAt = now + swingDelayMs(2400, 0);
@@ -327,7 +338,8 @@ export function mobAutoAttackRoll(
   now: number,
 ): { hit: boolean; dmg: number; anim: "melee" | "cast" } {
   const stats = mobCombatStats(mob.job, mob.level);
-  const magic = mobUsesMagicAuto(mob.job);
+  // Silenced casters still swing — mute magic autos only.
+  const magic = mobUsesMagicAuto(mob.job) && !(now < mob.silenceUntil);
   const atkMul = (now < mob.atkBuffUntil ? mob.atkBuffMul || 1 : 1) * (now < mob.atkDownUntil ? mob.atkDownMul || 1 : 1);
   const mobAcc = stats.dex + 40;
   const playerEva = evasionFromAgi(target.agi);
@@ -338,7 +350,6 @@ export function mobAutoAttackRoll(
     const power = Math.max(1, Math.floor((stats.int * 1.15 + stats.mnd * 0.35 + 4) * atkMul));
     const resist = Math.floor(target.vit * 0.3);
     let dmg = Math.max(1, power - resist);
-    if (now < mob.addleUntil) dmg = Math.max(1, Math.floor(dmg * 0.65));
     return { hit: true, dmg, anim: "cast" };
   }
   const att = Math.max(
@@ -347,6 +358,5 @@ export function mobAutoAttackRoll(
   );
   const def = defenseFromVit(target.vit);
   let dmg = physicalDamage(att, def, meleeFStr(mob.job, stats, target.vit, "none"), false);
-  if (now < mob.addleUntil) dmg = Math.max(1, Math.floor(dmg * 0.65));
   return { hit: true, dmg, anim: "melee" };
 }

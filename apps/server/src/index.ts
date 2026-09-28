@@ -751,8 +751,7 @@ function tickMobRoam(mob: Mob, now: number, dt: number) {
     now < mob.stunUntil ||
     now < mob.petrifyUntil ||
     now < mob.bindUntil ||
-    now < mob.sleepUntil ||
-    now < mob.silenceUntil
+    now < mob.sleepUntil
   ) {
     mob.anim = "idle";
     return;
@@ -2733,6 +2732,7 @@ function applyPendingMobDamage(mob: Mob, target: Player, now: number, rawDmg: nu
     );
     return;
   }
+  if (now < mob.addleUntil) dmg = Math.max(1, Math.floor(dmg * 0.65));
   target.hp = Math.max(0, target.hp - dmg);
   if (target.miseryRite) {
     target.miseryEmpowerUntil = now + 15_000;
@@ -2819,12 +2819,9 @@ function mobSwing(mob: Mob, now: number) {
     mob.targetId = null;
     return;
   }
-  // Temporal mute (Silencega) — forget the fight until it wears off.
+  // Silence / Mute — interrupt cast wind-up only; keep hate and melee.
   if (now < mob.silenceUntil) {
     clearMobPendingCast(mob);
-    mob.anim = "idle";
-    mob.targetId = null;
-    return;
   }
 
   let nearest: Player | null = null;
@@ -2933,6 +2930,7 @@ function mobSwing(mob: Mob, now: number) {
       );
       return;
     }
+    if (now < mob.addleUntil) dmg = Math.max(1, Math.floor(dmg * 0.65));
     nearest.hp = Math.max(0, nearest.hp - dmg);
     if (nearest.miseryRite) {
       nearest.miseryEmpowerUntil = now + 15_000;
