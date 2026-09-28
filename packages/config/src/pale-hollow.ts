@@ -1666,15 +1666,15 @@ export function paleHollowMobJob(
 
 
 export const PH_SEGMENT_A_MOBS: PaleHollowMobDef[] = [
-  // Extra level-1 cluster on the dry apron just north of the encampment (playtest).
-  { id: "ph-hare-hub-1", name: "Dust Hare", x: -6, z: 12, level: 1, archetype: "dust_hare", aggro: "safe", aggroRange: 0, hp: 45, drops: ["soft-pelt", "pale-dust"] },
-  { id: "ph-hare-hub-2", name: "Dust Hare", x: -2, z: 12, level: 1, archetype: "dust_hare", aggro: "safe", aggroRange: 0, hp: 45, drops: ["soft-pelt", "pale-dust"] },
-  { id: "ph-hare-hub-3", name: "Dust Hare", x: 2, z: 12, level: 1, archetype: "dust_hare", aggro: "safe", aggroRange: 0, hp: 45, drops: ["soft-pelt", "pale-dust"] },
-  { id: "ph-hare-hub-4", name: "Dust Hare", x: 6, z: 12, level: 1, archetype: "dust_hare", aggro: "safe", aggroRange: 0, hp: 45, drops: ["soft-pelt", "pale-dust"] },
-  { id: "ph-hare-hub-5", name: "Dust Hare", x: -5, z: 15, level: 1, archetype: "dust_hare", aggro: "safe", aggroRange: 0, hp: 45, drops: ["soft-pelt", "pale-dust"] },
-  { id: "ph-hare-hub-6", name: "Dust Hare", x: -1, z: 15, level: 1, archetype: "dust_hare", aggro: "safe", aggroRange: 0, hp: 45, drops: ["soft-pelt", "pale-dust"] },
-  { id: "ph-hare-hub-7", name: "Dust Hare", x: 3, z: 15, level: 1, archetype: "dust_hare", aggro: "safe", aggroRange: 0, hp: 45, drops: ["soft-pelt", "pale-dust"] },
-  { id: "ph-hare-hub-8", name: "Dust Hare", x: 8, z: 13, level: 1, archetype: "dust_hare", aggro: "safe", aggroRange: 0, hp: 45, drops: ["soft-pelt", "pale-dust"] },
+  // Extra level-1 cluster flanking the encampment (west/east sides, outside hub apron so roam/flee can walk).
+  { id: "ph-hare-hub-1", name: "Dust Hare", x: -24, z: 0, level: 1, archetype: "dust_hare", aggro: "safe", aggroRange: 0, hp: 45, drops: ["soft-pelt", "pale-dust"] },
+  { id: "ph-hare-hub-2", name: "Dust Hare", x: -27, z: 4, level: 1, archetype: "dust_hare", aggro: "safe", aggroRange: 0, hp: 45, drops: ["soft-pelt", "pale-dust"] },
+  { id: "ph-hare-hub-3", name: "Dust Hare", x: -23, z: 8, level: 1, archetype: "dust_hare", aggro: "safe", aggroRange: 0, hp: 45, drops: ["soft-pelt", "pale-dust"] },
+  { id: "ph-hare-hub-4", name: "Dust Hare", x: -26, z: 12, level: 1, archetype: "dust_hare", aggro: "safe", aggroRange: 0, hp: 45, drops: ["soft-pelt", "pale-dust"] },
+  { id: "ph-hare-hub-5", name: "Dust Hare", x: 24, z: 0, level: 1, archetype: "dust_hare", aggro: "safe", aggroRange: 0, hp: 45, drops: ["soft-pelt", "pale-dust"] },
+  { id: "ph-hare-hub-6", name: "Dust Hare", x: 27, z: 4, level: 1, archetype: "dust_hare", aggro: "safe", aggroRange: 0, hp: 45, drops: ["soft-pelt", "pale-dust"] },
+  { id: "ph-hare-hub-7", name: "Dust Hare", x: 23, z: 8, level: 1, archetype: "dust_hare", aggro: "safe", aggroRange: 0, hp: 45, drops: ["soft-pelt", "pale-dust"] },
+  { id: "ph-hare-hub-8", name: "Dust Hare", x: 26, z: 12, level: 1, archetype: "dust_hare", aggro: "safe", aggroRange: 0, hp: 45, drops: ["soft-pelt", "pale-dust"] },
   { id: "ph-hare-1", name: "Dust Hare", x: -8, z: 18, level: 1, archetype: "dust_hare", aggro: "safe", aggroRange: 0, hp: 45, drops: ["soft-pelt", "pale-dust"] },
   { id: "ph-hare-2", name: "Dust Hare", x: 6, z: 20, level: 1, archetype: "dust_hare", aggro: "safe", aggroRange: 0, hp: 45, drops: ["soft-pelt", "pale-dust"] },
   { id: "ph-hare-3", name: "Dust Hare", x: 24, z: 30, level: 2, archetype: "dust_hare", aggro: "safe", aggroRange: 0, hp: 55, drops: ["soft-pelt", "pale-dust"] },
