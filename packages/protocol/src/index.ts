@@ -185,7 +185,7 @@ export type UnitSnapshot = {
   animUntil: number;
   targetId: string | null;
   buffs: BuffState;
-  /** Present on players — drives swing SFX / future job visuals. */
+  /** Present on players and field mobs — drives swing SFX / job AI / visuals. */
   job?: JobId;
   /** Present on players — sprite set (male default). */
   gender?: Gender;

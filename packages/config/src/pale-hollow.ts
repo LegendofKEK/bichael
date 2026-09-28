@@ -1609,6 +1609,37 @@ export type PaleHollowRareDrop = {
   chance: number;
 };
 
+/**
+ * Same ids as player `JobId` — kept local so `@bellgrave/config` stays free of a combat dep.
+ * Job drives mob AI ability choice, engage range, and attack stat curves.
+ */
+export type PaleHollowMobJob =
+  | "time_mage"
+  | "knight"
+  | "rogue"
+  | "cleric"
+  | "sorcerer"
+  | "fighter"
+  | "battle_mage";
+
+/**
+ * Default job per archetype (theme match).
+ * Spawn defs may override with `job` for variants (e.g. knight dweller).
+ *
+ * Follow-ups: weighted job tables per segment, UI nameplate job glyph,
+ * and richer kit reuse beyond the NPC-safe ability stubs in mob-job-ai.
+ */
+export const PH_ARCHETYPE_DEFAULT_JOB: Record<PaleHollowArchetype, PaleHollowMobJob> = {
+  dust_hare: "fighter",
+  pale_slime: "battle_mage",
+  hollow_scavenger: "rogue",
+  ashbeam_boar: "fighter",
+  ruin_dweller: "sorcerer",
+  cliff_adder: "rogue",
+  seam_golem: "knight",
+  shard_wight: "time_mage",
+};
+
 export type PaleHollowMobDef = {
   id: string;
   name: string;
@@ -1616,6 +1647,8 @@ export type PaleHollowMobDef = {
   z: number;
   level: number;
   archetype: PaleHollowArchetype;
+  /** Optional job override — defaults via `PH_ARCHETYPE_DEFAULT_JOB`. */
+  job?: PaleHollowMobJob;
   aggro: PaleHollowAggro;
   aggroRange: number;
   linkRange?: number;
@@ -1624,6 +1657,13 @@ export type PaleHollowMobDef = {
   /** Optional rare gear — rolled once per kill at the given chance. */
   rareDrops?: PaleHollowRareDrop[];
 };
+
+export function paleHollowMobJob(
+  d: Pick<PaleHollowMobDef, "archetype" | "job">,
+): PaleHollowMobJob {
+  return d.job ?? PH_ARCHETYPE_DEFAULT_JOB[d.archetype];
+}
+
 
 export const PH_SEGMENT_A_MOBS: PaleHollowMobDef[] = [
   // Extra level-1 cluster on the dry apron just north of the encampment (playtest).
@@ -1638,12 +1678,12 @@ export const PH_SEGMENT_A_MOBS: PaleHollowMobDef[] = [
   { id: "ph-hare-1", name: "Dust Hare", x: -8, z: 18, level: 1, archetype: "dust_hare", aggro: "safe", aggroRange: 0, hp: 45, drops: ["soft-pelt", "pale-dust"] },
   { id: "ph-hare-2", name: "Dust Hare", x: 6, z: 20, level: 1, archetype: "dust_hare", aggro: "safe", aggroRange: 0, hp: 45, drops: ["soft-pelt", "pale-dust"] },
   { id: "ph-hare-3", name: "Dust Hare", x: 24, z: 30, level: 2, archetype: "dust_hare", aggro: "safe", aggroRange: 0, hp: 55, drops: ["soft-pelt", "pale-dust"] },
-  { id: "ph-hare-4", name: "Dust Hare", x: -30, z: 36, level: 2, archetype: "dust_hare", aggro: "safe", aggroRange: 0, hp: 55, drops: ["soft-pelt", "horn", "pale-dust"] },
+  { id: "ph-hare-4", name: "Dust Hare", x: -30, z: 36, level: 2, archetype: "dust_hare", job: "rogue", aggro: "safe", aggroRange: 0, hp: 55, drops: ["soft-pelt", "horn", "pale-dust"] },
   { id: "ph-hare-5", name: "Dust Hare", x: 40, z: 44, level: 2, archetype: "dust_hare", aggro: "safe", aggroRange: 0, hp: 50, drops: ["soft-pelt"] },
   { id: "ph-hare-6", name: "Dust Hare", x: -50, z: 28, level: 2, archetype: "dust_hare", aggro: "safe", aggroRange: 0, hp: 50, drops: ["soft-pelt", "pale-dust"] },
   { id: "ph-hare-7", name: "Dust Hare", x: 54, z: 34, level: 2, archetype: "dust_hare", aggro: "safe", aggroRange: 0, hp: 52, drops: ["soft-pelt"] },
   { id: "ph-slime-1", name: "Pale Slime", x: -18, z: 35, level: 3, archetype: "pale_slime", aggro: "proximity", aggroRange: 4, hp: 80, drops: ["slime-oil", "pale-dust"] },
-  { id: "ph-slime-2", name: "Pale Slime", x: -16, z: 42, level: 4, archetype: "pale_slime", aggro: "proximity", aggroRange: 4, hp: 95, drops: ["slime-oil", "pale-dust"] },
+  { id: "ph-slime-2", name: "Pale Slime", x: -16, z: 42, level: 4, archetype: "pale_slime", job: "sorcerer", aggro: "proximity", aggroRange: 4, hp: 95, drops: ["slime-oil", "pale-dust"] },
   { id: "ph-slime-3", name: "Pale Slime", x: -36, z: 48, level: 3, archetype: "pale_slime", aggro: "proximity", aggroRange: 3.5, hp: 80, drops: ["slime-oil", "pale-dust"] },
   { id: "ph-slime-4", name: "Pale Slime", x: 34, z: 70, level: 4, archetype: "pale_slime", aggro: "proximity", aggroRange: 3.5, hp: 90, drops: ["slime-oil"] },
 ];
@@ -1670,7 +1710,7 @@ export const PH_SEGMENT_C_MOBS: PaleHollowMobDef[] = [
   { id: "ph-adder-1", name: "Cliff Adder", x: 54, z: 142, level: 12, archetype: "cliff_adder", aggro: "proximity", aggroRange: 3.2, hp: 180, drops: ["soft-pelt", "pale-dust"] },
   { id: "ph-adder-2", name: "Cliff Adder", x: -56, z: 155, level: 13, archetype: "cliff_adder", aggro: "proximity", aggroRange: 3.2, hp: 190, drops: ["soft-pelt"] },
   { id: "ph-adder-3", name: "Cliff Adder", x: 50, z: 170, level: 14, archetype: "cliff_adder", aggro: "proximity", aggroRange: 3.5, hp: 210, drops: ["soft-pelt", "bone-chip"] },
-  { id: "ph-scav-c1", name: "Hollow Scavenger", x: 0, z: 148, level: 12, archetype: "hollow_scavenger", aggro: "sight", aggroRange: 9, linkRange: 6, hp: 240, drops: ["linen-scrap"] },
+  { id: "ph-scav-c1", name: "Hollow Scavenger", x: 0, z: 148, level: 12, archetype: "hollow_scavenger", job: "fighter", aggro: "sight", aggroRange: 9, linkRange: 6, hp: 240, drops: ["linen-scrap"] },
 ];
 
 export const PH_SEGMENT_D_MOBS: PaleHollowMobDef[] = [
@@ -1678,9 +1718,9 @@ export const PH_SEGMENT_D_MOBS: PaleHollowMobDef[] = [
   { id: "ph-golem-2", name: "Seam Golem", x: -8, z: 218, level: 17, archetype: "seam_golem", aggro: "sight", aggroRange: 8, hp: 460, drops: ["tin-ore", "cracked-brick"] },
   { id: "ph-wight-1", name: "Shard Wight", x: -18, z: 208, level: 16, archetype: "shard_wight", aggro: "sight", aggroRange: 9, linkRange: 6, hp: 340, drops: ["bone-chip", "pale-dust"] },
   { id: "ph-wight-2", name: "Shard Wight", x: -14, z: 216, level: 17, archetype: "shard_wight", aggro: "sight", aggroRange: 9, linkRange: 6, hp: 360, drops: ["bone-chip"] },
-  { id: "ph-wight-3", name: "Shard Wight", x: -24, z: 212, level: 18, archetype: "shard_wight", aggro: "sight", aggroRange: 9, linkRange: 6, hp: 380, drops: ["bone-chip", "pale-dust"] },
+  { id: "ph-wight-3", name: "Shard Wight", x: -24, z: 212, level: 18, archetype: "shard_wight", job: "sorcerer", aggro: "sight", aggroRange: 9, linkRange: 6, hp: 380, drops: ["bone-chip", "pale-dust"] },
   { id: "ph-dwell-d1", name: "Ruin Dweller", x: 6, z: 206, level: 15, archetype: "ruin_dweller", aggro: "sight", aggroRange: 10, linkRange: 7, hp: 320, drops: ["cracked-brick"], rareDrops: [{ slug: "chainmail", chance: 0.01 }] },
-  { id: "ph-dwell-d2", name: "Ruin Dweller", x: 28, z: 228, level: 16, archetype: "ruin_dweller", aggro: "sight", aggroRange: 10, hp: 340, drops: ["cracked-brick", "linen-scrap"], rareDrops: [{ slug: "chainmail", chance: 0.01 }] },
+  { id: "ph-dwell-d2", name: "Ruin Dweller", x: 28, z: 228, level: 16, archetype: "ruin_dweller", job: "knight", aggro: "sight", aggroRange: 10, hp: 340, drops: ["cracked-brick", "linen-scrap"], rareDrops: [{ slug: "chainmail", chance: 0.01 }] },
 ];
 
 export const PH_ALL_MOBS: PaleHollowMobDef[] = [

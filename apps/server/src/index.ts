@@ -1,5 +1,4 @@
 import {
-  GUARD_L1,
   JOBS,
   MAX_LEVEL,
   REST_TICK,
@@ -55,6 +54,7 @@ import {
   type JobId,
   type TimAbilityId,
   type WeaponTpAbilityId,
+  jobStatsAtLevel,
 } from "@bellgrave/combat";
 import {
   ITEM,
@@ -95,6 +95,13 @@ import {
   type ItemDef,
 } from "@bellgrave/items";
 import { createPaleHollowMobs, createPaleHollowNodes, relocateGatherNode, type FieldNode } from "./pale-hollow-world";
+import {
+  mobAutoAttackRoll,
+  mobEngageRange,
+  mobMpForJob,
+  resolveMobJob,
+  tryMobJobAbility,
+} from "./mob-job-ai";
 import type {
   AbilityId,
   Equipment,
@@ -325,6 +332,12 @@ type Mob = {
   drops: string[];
   rareDrops: { slug: string; chance: number }[];
   archetype: string;
+  /** Player-shared job id — drives AI abilities / engage range / attack curves. */
+  job: JobId;
+  level: number;
+  nextAbilityAt: number;
+  atkBuffUntil: number;
+  atkBuffMul: number;
   /** Idle wander waypoint (NaN = none). */
   roamTx: number;
   roamTz: number;
@@ -422,8 +435,14 @@ function spawnFieldMob(
     drops: string[];
     rareDrops?: { slug: string; chance: number }[];
     archetype: string;
+    job?: JobId | string;
+    level?: number;
   },
 ): Mob {
+  const level = Math.max(1, opts.level ?? 1);
+  const job = resolveMobJob(opts.archetype, opts.job as JobId | undefined);
+  const mpPool = mobMpForJob(job, level);
+  const base = emptyCombatFields();
   return {
     id,
     name,
@@ -435,13 +454,20 @@ function spawnFieldMob(
     facing: Math.PI,
     hp,
     maxHp: hp,
-    ...emptyCombatFields(),
+    ...base,
+    mp: mpPool.mp,
+    maxMp: mpPool.maxMp,
     aggro: opts.aggro,
     aggroRange: opts.aggroRange,
     linkRange: opts.linkRange ?? 0,
     drops: [...opts.drops],
     rareDrops: [...(opts.rareDrops ?? [])],
     archetype: opts.archetype,
+    job,
+    level,
+    nextAbilityAt: 0,
+    atkBuffUntil: 0,
+    atkBuffMul: 1,
     roamTx: Number.NaN,
     roamTz: Number.NaN,
     // Stagger first wander so packs don't sync-step
@@ -459,6 +485,8 @@ function spawnSegmentAPack(): Mob[] {
       drops: f.drops,
       rareDrops: f.rareDrops,
       archetype: f.archetype,
+      job: f.job,
+      level: f.level,
     }),
   );
 }
@@ -947,6 +975,7 @@ function snapshotFor(p: Player): SnapshotMessage {
       targetId: mob.alive ? mob.targetId : null,
       buffs: mobBuffs(mob),
       archetype: mob.archetype,
+      job: mob.job,
       deathAt: mob.alive ? undefined : mob.deathAt,
     });
   }
@@ -2112,11 +2141,12 @@ function playerSwing(p: Player, now: number) {
   if (physical) {
     att = Math.max(1, Math.floor(att * fighterAttackMul(p, now)));
   }
-  let def = defenseFromVit(GUARD_L1.vit);
+  const mobStats = jobStatsAtLevel(mob.job, mob.level);
+  let def = defenseFromVit(mobStats.vit);
   if (now < mob.diaUntil) def = Math.max(1, Math.floor(def * 0.7));
   let acc = stats.dex + 40 + tree.acc + (playerEquipmentStats(p).acc ?? 0) - (now < mob.distractUntil ? mob.distractAcc : 0);
   if (physical && playerHasJob(p, "fighter")) acc += fighterAccBonus(p, now);
-  let eva = evasionFromAgi(GUARD_L1.agi);
+  let eva = evasionFromAgi(mobStats.agi);
   if (now < mob.falseGuardUntil) eva = Math.max(0, eva - 18);
   if (Math.random() > hitChance(acc, eva)) {
     pushLog(p, "You miss.");
@@ -2135,7 +2165,7 @@ function playerSwing(p: Player, now: number) {
   let dmg = physicalDamage(
     att,
     def,
-    meleeFStr(p.job, stats, GUARD_L1.vit, stance),
+    meleeFStr(p.job, stats, mobStats.vit, stance),
     crit,
   );
   if (backbladeReady) {
@@ -2251,7 +2281,8 @@ function mobSwing(mob: Mob, now: number) {
   mob.facing = facingTo(mob.x, mob.z, nearest.x, nearest.z);
 
   const d = dist(mob.x, mob.z, nearest.x, nearest.z);
-  if (d > MELEE_RANGE + 0.4) {
+  const engage = mobEngageRange(mob.job);
+  if (d > engage) {
     if (now >= mob.animUntil) {
       const swingSlow = now < mob.slowUntil ? mob.swingPenalty : 0;
       const grav = now < mob.gravityUntil ? mob.gravityPct : 0;
@@ -2288,72 +2319,80 @@ function mobSwing(mob: Mob, now: number) {
     pushLog(nearest, `${mob.name} passes through violet smoke — miss!`);
     return;
   }
-  const swingSlow = now < mob.slowUntil ? mob.swingPenalty : 0;
-  mob.nextSwingAt = now + swingDelayMs(2400, -swingSlow);
-  mob.anim = "melee";
-  mob.animUntil = now + 480;
+
   const defStats = playerCombatStats(nearest);
-  const mobAcc = GUARD_L1.dex + 40;
-  let playerEva = evasionFromAgi(defStats.agi) + (playerEquipmentStats(nearest).eva ?? 0);
-  playerEva = Math.max(0, playerEva - fighterEvaPenalty(nearest, now));
-  if (Math.random() > hitChance(mobAcc, playerEva)) {
-    pushLog(nearest, `${mob.name} misses you.`);
-    return;
-  }
-  const att = Math.max(
-    1,
-    Math.floor(
-      attackFromStats(GUARD_L1, false, 6, { physical: true }) *
-        (now < mob.atkDownUntil ? mob.atkDownMul || 1 : 1),
-    ),
-  );
-  const def = defenseFromVit(defStats.vit) + (playerEquipmentStats(nearest).def ?? 0);
-  let dmg = physicalDamage(att, def, fStr(GUARD_L1.str, defStats.vit), false);
-  if (now < mob.addleUntil) dmg = Math.max(1, Math.floor(dmg * 0.65));
-  // Terrain-tied pressure: slimes hit harder in water; adders on vine cliffs
-  if (nearest.zoneId === "pale_hollow") {
-    const b = paleHollowBiome(mob.x, mob.z);
-    if (mob.archetype === "pale_slime" && (b === "river" || b === "riverbank")) {
-      dmg = Math.max(1, Math.floor(dmg * 1.25));
+  const vitals = {
+    vit: defStats.vit,
+    agi: Math.max(0, defStats.agi - fighterEvaPenalty(nearest, now)),
+  };
+
+  const applyMobDamage = (rawDmg: number, hitLog: string) => {
+    let dmg = rawDmg;
+    if (nearest.zoneId === "pale_hollow") {
+      const b = paleHollowBiome(mob.x, mob.z);
+      if (mob.archetype === "pale_slime" && (b === "river" || b === "riverbank")) {
+        dmg = Math.max(1, Math.floor(dmg * 1.25));
+      }
+      if (mob.archetype === "cliff_adder" && b === "vine_cliff") {
+        dmg = Math.max(1, Math.floor(dmg * 1.15));
+      }
     }
-    if (mob.archetype === "cliff_adder" && b === "vine_cliff") {
-      dmg = Math.max(1, Math.floor(dmg * 1.15));
+    dmg = Math.max(0, Math.floor(dmg * playerPhysDtMul(nearest, now)));
+    dmg = absorbStoneskin(nearest, now, dmg);
+    const beforeShield = nearest.healAbsorbHp;
+    dmg = absorbHealShield(nearest, now, dmg);
+    const soaked = Math.max(0, beforeShield - nearest.healAbsorbHp);
+    dmg = Math.max(0, Math.floor(dmg * fighterDefenseMul(nearest, now)));
+    const wall = absorbManaWall(nearest, now, dmg);
+    dmg = wall.dmg;
+    if (dmg <= 0) {
+      pushLog(
+        nearest,
+        soaked > 0
+          ? `${mob.name}'s blow is swallowed by your Solace shield!`
+          : wall.bled > 0
+            ? `${mob.name}'s blow bleeds ${wall.bled} MP through Mana Wall!`
+            : `${mob.name}'s blow glances off your ward!`,
+      );
+      return;
     }
+    nearest.hp = Math.max(0, nearest.hp - dmg);
+    if (nearest.miseryRite) {
+      nearest.miseryEmpowerUntil = now + 15_000;
+    }
+    stopRest(nearest, `${mob.name}'s blow breaks your rest!`);
+    const notes: string[] = [];
+    if (soaked > 0) notes.push(`${soaked} absorbed`);
+    if (wall.bled > 0) notes.push(`${wall.bled} MP`);
+    if (now < mob.addleUntil) notes.push("Addled");
+    const base = hitLog.endsWith(".") ? hitLog.slice(0, -1) : hitLog;
+    pushLog(nearest, notes.length > 0 ? `${base} (${notes.join(", ")}).` : `${base}.`);
+  };
+
+  const usedAbility = tryMobJobAbility(mob, {
+    now,
+    dist: d,
+    player: nearest,
+    vitals,
+    pushLog: (msg) => pushLog(nearest, msg),
+    applyPlayerDamage: (raw, note) => applyMobDamage(raw, note),
+  });
+
+  if (!usedAbility) {
+    const swingSlow = now < mob.slowUntil ? mob.swingPenalty : 0;
+    mob.nextSwingAt = now + swingDelayMs(2400, -swingSlow);
+    const roll = mobAutoAttackRoll(mob, vitals, now);
+    mob.anim = roll.anim;
+    mob.animUntil = now + (roll.anim === "cast" ? 560 : 480);
+    if (!roll.hit) {
+      pushLog(nearest, `${mob.name} misses you.`);
+      return;
+    }
+    const verb =
+      roll.anim === "cast" ? `strikes you with magic for ${roll.dmg}` : `hits you for ${roll.dmg}`;
+    applyMobDamage(roll.dmg, `${mob.name} ${verb}`);
   }
-  dmg = Math.max(0, Math.floor(dmg * playerPhysDtMul(nearest, now)));
-  dmg = absorbStoneskin(nearest, now, dmg);
-  const beforeShield = nearest.healAbsorbHp;
-  dmg = absorbHealShield(nearest, now, dmg);
-  const soaked = Math.max(0, beforeShield - nearest.healAbsorbHp);
-  dmg = Math.max(0, Math.floor(dmg * fighterDefenseMul(nearest, now)));
-  const wall = absorbManaWall(nearest, now, dmg);
-  dmg = wall.dmg;
-  if (dmg <= 0) {
-    pushLog(
-      nearest,
-      soaked > 0
-        ? `${mob.name}'s blow is swallowed by your Solace shield!`
-        : wall.bled > 0
-          ? `${mob.name}'s blow bleeds ${wall.bled} MP through Mana Wall!`
-          : `${mob.name}'s blow glances off your ward!`,
-    );
-    return;
-  }
-  nearest.hp = Math.max(0, nearest.hp - dmg);
-  if (nearest.miseryRite) {
-    nearest.miseryEmpowerUntil = now + 15_000;
-  }
-  stopRest(nearest, `${mob.name}'s blow breaks your rest!`);
-  const notes: string[] = [];
-  if (soaked > 0) notes.push(`${soaked} absorbed`);
-  if (wall.bled > 0) notes.push(`${wall.bled} MP`);
-  if (now < mob.addleUntil) notes.push("Addled");
-  pushLog(
-    nearest,
-    notes.length > 0
-      ? `${mob.name} hits you for ${dmg} (${notes.join(", ")}).`
-      : `${mob.name} hits you for ${dmg}.`,
-  );
+
   if (nearest.hp <= 0) {
     if (now < nearest.reraiseUntil) {
       nearest.reraiseUntil = 0;
@@ -2387,7 +2426,10 @@ function tickSim() {
         aggroRange: mob.aggroRange ?? 4,
         linkRange: mob.linkRange ?? 0,
         drops: mob.drops ?? [],
+        rareDrops: mob.rareDrops ?? [],
         archetype: mob.archetype ?? "pale_slime",
+        job: mob.job,
+        level: mob.level,
       });
     }
     if (now >= mob.slowUntil) mob.swingPenalty = 0;
