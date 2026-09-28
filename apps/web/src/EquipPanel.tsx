@@ -213,6 +213,9 @@ export function EquipPanel({ you, me, onClose }: Props) {
               <span className="equip-free-hint">{freeLeft} free pt{freeLeft === 1 ? "" : "s"}</span>
             )}
           </div>
+          <div className="equip-attr-legend" aria-hidden="true">
+            base · tree · free · gear
+          </div>
           {STAT_ORDER.map(([label, key]) => {
             const bonus = freeStats[key] ?? 0;
             return (
@@ -222,7 +225,7 @@ export function EquipPanel({ you, me, onClose }: Props) {
                 tip={statTooltip(job, key)}
                 value={stats[key]}
                 freeBonus={bonus}
-                breakdown={`base ${derived.base[key]} / tree ${formatSigned(derived.tree[key])} / free ${formatSigned(bonus)} / gear ${formatSigned(gearStats[key] ?? 0)}`}
+                breakdown={`base ${derived.base[key]} · tree ${formatSigned(derived.tree[key])} · free ${formatSigned(bonus)} · gear ${formatSigned(gearStats[key] ?? 0)}`}
                 canInc={freeLeft > 0}
                 canDec={bonus > 0}
                 onInc={() => send({ type: "skill/freestat", attr: key as AttrKey, delta: 1 })}
@@ -424,7 +427,7 @@ function StatRow({
 }) {
   const tipId = `stat-tip-${label}`;
   return (
-    <div className="equip-stat-row">
+    <div className="equip-stat-row equip-attr-row">
       <button type="button" className="label equip-stat-label" aria-describedby={tipId}>
         {label}
       </button>
@@ -434,9 +437,6 @@ function StatRow({
       </div>
       <span className="value">{value}</span>
       {freeBonus > 0 && <span className="equip-free-bonus">+{freeBonus}</span>}
-      <span className="hint" title={breakdown}>
-        {breakdown}
-      </span>
       <span className="equip-arrow-group">
         <button
           type="button"
@@ -460,6 +460,9 @@ function StatRow({
         >
           ▼
         </button>
+      </span>
+      <span className="equip-attr-breakdown" title={breakdown}>
+        {breakdown}
       </span>
     </div>
   );
