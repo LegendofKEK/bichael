@@ -313,12 +313,12 @@ export function resolveSorcererAbility(
       }
       payRecast();
       if (anchor) p.facing = hooks.facingTo(p.x, p.z, anchor.x, anchor.z);
-      p.elementalSealUntil = 0;
       p.lastScElement = def.element;
       p.scCastFlashUntil = now + 650;
       p.anim = "cast";
       p.animUntil = now + 620;
       const dmg = elementalDamage(p, def.potency, now, cascadeBonus, combatStats);
+      p.elementalSealUntil = 0;
       let hits = 0;
       for (const m of mobsInRadius(hooks.allMobs(), cx, cz, def.aoe)) {
         applyNukeHit(p, m, dmg, def.element, now);
@@ -345,12 +345,12 @@ export function resolveSorcererAbility(
     }
     payRecast();
     p.facing = hooks.facingTo(p.x, p.z, m.x, m.z);
-    p.elementalSealUntil = 0;
     p.lastScElement = def.element;
     p.scCastFlashUntil = now + 650;
     p.anim = "cast";
     p.animUntil = now + 580;
     const dmg = elementalDamage(p, def.potency, now, cascadeBonus, combatStats);
+    p.elementalSealUntil = 0;
     applyNukeHit(p, m, dmg, def.element, now);
     hooks.pushLog(p, `${def.label} â€” ${dmg} on ${m.name ?? "foe"}!`);
     if (m.hp <= 0) hooks.onMobKill(p, m, now);

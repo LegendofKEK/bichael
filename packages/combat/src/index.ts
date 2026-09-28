@@ -71,6 +71,11 @@ export function physicalDamage(
   return Math.max(1, dmg);
 }
 
+/**
+ * Auto-attack delay after haste.
+ * Formula: floor(baseDelay * (1 - clamp(hastePct, 0, 0.8)))
+ * Prefer `resolveSwingDelayMs` so catalog weapon delayMs drives the base.
+ */
 export function swingDelayMs(baseDelay: number, hastePct: number): number {
   const haste = Math.min(0.8, Math.max(0, hastePct));
   return Math.floor(baseDelay * (1 - haste));
@@ -114,8 +119,21 @@ export const ABILITIES = {
   rest: { mp: 0, recastMs: 0 },
 } as const;
 
-/** Base auto-attack delay (ms) before haste. */
+/** Fallback auto-attack delay (ms) when no weapon delayMs is equipped. */
 export const SWING_BASE_MS = 1600;
+
+/**
+ * Resolve swing delay from catalog weapon `delayMs` + haste.
+ * Missing/invalid delay falls back to SWING_BASE_MS.
+ */
+export function resolveSwingDelayMs(
+  weaponDelayMs: number | null | undefined,
+  hastePct: number,
+): number {
+  const base =
+    typeof weaponDelayMs === "number" && weaponDelayMs > 0 ? weaponDelayMs : SWING_BASE_MS;
+  return swingDelayMs(base, hastePct);
+}
 
 /** Per-second rest tick (server applies once per second while resting). */
 export const REST_TICK = {
