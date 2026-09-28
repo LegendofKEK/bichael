@@ -1434,7 +1434,12 @@ function rewardMobKill(p: Player, mob: Mob, now: number) {
   const wasTarget = p.targetId === mob.id;
   if (wasTarget) p.targetId = null;
   p.dust += 25;
-  p.xp += 40;
+  // Level-scaled kill XP: floor(200 * enemyLevel / playerLevel), clamped [0, 200].
+  const killXp = Math.max(
+    0,
+    Math.min(200, Math.floor((200 * mob.level) / Math.max(1, p.level))),
+  );
+  p.xp += killXp;
   tryLevelUp(p);
   const dropNotes: string[] = [];
   for (const mat of mob.drops ?? []) {
@@ -1458,8 +1463,8 @@ function rewardMobKill(p: Player, mob: Mob, now: number) {
   pushLog(
     p,
     dropNotes.length
-      ? `${mob.name} defeated. +25 Dust, +40 XP. Loot: ${dropNotes.join(", ")}.`
-      : `${mob.name} defeated. +25 Dust, +40 XP.`,
+      ? `${mob.name} defeated. +25 Dust, +${killXp} XP. Loot: ${dropNotes.join(", ")}.`
+      : `${mob.name} defeated. +25 Dust, +${killXp} XP.`,
   );
   if (wasTarget) autoEngageNext(p, mob.id);
 }
@@ -2028,7 +2033,8 @@ function handleSubjob(p: Player, job: JobId | null) {
   }
   p.subjob = job;
   ensureJobHubs(p);
-  syncVitals(p, true);
+  // Support toggles must not refill HP/MP (was a free full heal exploit).
+  syncVitals(p, false);
   const subLv = subjobLevel(p.level);
   pushLog(
     p,

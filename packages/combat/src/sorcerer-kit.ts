@@ -472,8 +472,8 @@ export const SORCERER_ABILITY_BLURBS: Record<SorcererAbilityId, string> = {
   sc_life_leech: "Drain HP from the target.",
   sc_mana_siphon: "Drain MP from the target.",
   sc_gloom_stun: "Dark stun — brief lockdown.",
-  sc_phase_warp: "Long recast escape to hall entrance (MVP: short blink).",
-  sc_ash_escape: "Quick step back toward safety.",
+  sc_phase_warp: "Long recast escape to the Pale Hollow encampment.",
+  sc_ash_escape: "Quick escape back to the Pale Hollow encampment.",
 };
 
 export const SORCERER_CATEGORY_TABS: { id: SorcererAbilityCategory | "all"; label: string }[] = [

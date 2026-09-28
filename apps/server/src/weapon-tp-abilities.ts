@@ -173,7 +173,7 @@ export function resolveWeaponTpAbility(
   );
 
   if (mob.hp <= 0) {
-    mob.alive = false;
+    // Let rewardMobKill own alive=false / respawn (setting alive early skipped XP/loot).
     ctx.onMobKill(p, mob);
   }
 }
