@@ -1537,7 +1537,10 @@ export const PH_SEGMENT_A_NODES: PaleHollowNodeDef[] = [
   { id: "ph-farm-d", name: "Dustgrain Patch", x: -28, z: 32, kind: "harvest", yields: ["dustgrain", "pale-dust"], interactMs: 2500, respawnMs: 55_000 },
   { id: "ph-farm-e", name: "Dustgrain Patch", x: 48, z: 38, kind: "harvest", yields: ["dustgrain", "pale-dust"], interactMs: 2500, respawnMs: 55_000 },
   { id: "ph-farm-f", name: "Dustgrain Patch", x: -52, z: 42, kind: "harvest", yields: ["dustgrain"], interactMs: 2500, respawnMs: 55_000 },
-  { id: "ph-clay-a", name: "Clay Bank", x: -20, z: 34, kind: "harvest", yields: ["potters-clay", "clay-crab"], interactMs: 2500, respawnMs: 65_000 },
+  { id: "ph-flax-a", name: "Pale Flax Stand", x: -14, z: 26, kind: "harvest", yields: ["pale-flax", "dead-fiber"], interactMs: 2800, respawnMs: 60_000 },
+  { id: "ph-flax-b", name: "Pale Flax Stand", x: 18, z: 34, kind: "harvest", yields: ["pale-flax", "pale-dust"], interactMs: 2800, respawnMs: 60_000 },
+  { id: "ph-sand-a", name: "River Sand Bar", x: -22, z: 38, kind: "harvest", yields: ["river-sand", "pale-dust"], interactMs: 2500, respawnMs: 65_000 },
+  { id: "ph-clay-a", name: "Clay Bank", x: -20, z: 34, kind: "harvest", yields: ["potters-clay", "clay-crab", "river-sand"], interactMs: 2500, respawnMs: 65_000 },
   { id: "ph-fish-a", name: "Chalk Pool", x: -18, z: 36, kind: "fish", yields: ["fossil-minnow"], interactMs: 4000, respawnMs: 75_000 },
   { id: "ph-fish-b", name: "Chalk Pool", x: 36, z: 72, kind: "fish", yields: ["fossil-minnow"], interactMs: 4000, respawnMs: 75_000 },
   { id: "ph-copper-nugget", name: "Copper Nugget Vein", x: 18, z: 26, kind: "mine", yields: ["copper-ore"], interactMs: 4000, respawnMs: 120_000 },
@@ -1549,15 +1552,15 @@ export const PH_SEGMENT_B_NODES: PaleHollowNodeDef[] = [
   { id: "ph-ash-c", name: "Ashbeam Log", x: -24, z: 96, kind: "harvest", yields: ["ashbeam-log", "bark-strip"], interactMs: 3000, respawnMs: 70_000 },
   { id: "ph-ash-d", name: "Ashbeam Log", x: 40, z: 96, kind: "harvest", yields: ["ashbeam-log"], interactMs: 3000, respawnMs: 70_000 },
   { id: "ph-ash-e", name: "Ashbeam Log", x: -40, z: 68, kind: "harvest", yields: ["ashbeam-log", "bark-strip"], interactMs: 3000, respawnMs: 70_000 },
-  { id: "ph-fiber-a", name: "Dead Fiber Thicket", x: -36, z: 92, kind: "harvest", yields: ["dead-fiber", "pale-dust"], interactMs: 2800, respawnMs: 60_000 },
-  { id: "ph-fiber-b", name: "Dead Fiber Thicket", x: 50, z: 84, kind: "harvest", yields: ["dead-fiber"], interactMs: 2800, respawnMs: 60_000 },
+  { id: "ph-fiber-a", name: "Dead Fiber Thicket", x: -36, z: 92, kind: "harvest", yields: ["dead-fiber", "pale-flax", "pale-dust"], interactMs: 2800, respawnMs: 60_000 },
+  { id: "ph-fiber-b", name: "Dead Fiber Thicket", x: 50, z: 84, kind: "harvest", yields: ["dead-fiber", "pale-flax"], interactMs: 2800, respawnMs: 60_000 },
   { id: "ph-root-a", name: "Antidote Root", x: 32, z: 100, kind: "harvest", yields: ["antidote-root", "pale-dust"], interactMs: 3200, respawnMs: 90_000 },
 ];
 
 export const PH_SEGMENT_C_NODES: PaleHollowNodeDef[] = [
   { id: "ph-cobble-a", name: "Cobble Heap", x: -6, z: 140, kind: "mine", yields: ["cobble", "pale-dust"], interactMs: 3500, respawnMs: 80_000 },
-  { id: "ph-lime-a", name: "Limestone Face", x: 16, z: 150, kind: "mine", yields: ["limestone"], interactMs: 4000, respawnMs: 100_000 },
-  { id: "ph-lime-b", name: "Limestone Face", x: -18, z: 158, kind: "mine", yields: ["limestone", "cobble"], interactMs: 4000, respawnMs: 100_000 },
+  { id: "ph-lime-a", name: "Limestone Face", x: 16, z: 150, kind: "mine", yields: ["limestone", "rock-salt"], interactMs: 4000, respawnMs: 100_000 },
+  { id: "ph-lime-b", name: "Limestone Face", x: -18, z: 158, kind: "mine", yields: ["limestone", "cobble", "rock-salt"], interactMs: 4000, respawnMs: 100_000 },
   { id: "ph-cord-a", name: "Climbing Cord", x: 48, z: 148, kind: "harvest", yields: ["climbing-cord"], interactMs: 3500, respawnMs: 110_000 },
   { id: "ph-cord-b", name: "Climbing Cord", x: -50, z: 155, kind: "harvest", yields: ["climbing-cord"], interactMs: 3500, respawnMs: 110_000 },
 ];

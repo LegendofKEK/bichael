@@ -81,7 +81,7 @@ import {
   paleHollowPlaceOnDryLand,
   paleHollowWalkable,
 } from "@bellgrave/config";
-import { CATALOG_BY_SLUG, craftXpToNext, emptyCraftSkills, getCraftableItem, ownedMatQty, recipeMaterials, type CraftSkill } from "@bellgrave/items";
+import { CATALOG_BY_SLUG, craftXpToNext, emptyCraftSkills, getCraftableItem, ownedMatQty, pickAffordableMaterials, recipeMaterials, type CraftSkill } from "@bellgrave/items";
 import { createPaleHollowMobs, createPaleHollowNodes, relocateGatherNode, type FieldNode } from "./pale-hollow-world";
 import type {
   AbilityId,
@@ -1693,7 +1693,7 @@ function handleNpcInteract(p: Player, npcId: string) {
       crafter:
         "Bring base mats from the field. Synth at my bench — I'll rank your crafts as you work.",
       vendor:
-        "Provisions are thin, traveler. Starter kit from the camp claim will see you through Segment A.",
+        "Provisions are thin, traveler. Gather Pale Flax in the scrub, River Sand on the clay banks, and Rock Salt flecks on the limestone faces — I do not stock craft mats, only advice.",
     };
     send(p.ws, {
       type: "npc/dialog",
@@ -2534,16 +2534,16 @@ function handleCraft(p: Player, itemId: number) {
     pushLog(p, `${def.name} needs ${skill} level ${def.craftLevel} (you have ${skillLv}).`);
     return;
   }
-  const mats = recipeMaterials(def);
-  if (mats.length === 0) {
-    pushLog(p, "Recipe materials unknown.");
-    return;
-  }
-  for (const mat of mats) {
-    if (ownedMatQty(mat.slug, p.inventory, p.baseMats) < mat.qty) {
-      pushLog(p, `Need ${mat.name} ×${mat.qty}.`);
+  const mats = pickAffordableMaterials(def, p.inventory, p.baseMats);
+  if (!mats || mats.length === 0) {
+    const preview = recipeMaterials(def);
+    if (preview.length === 0) {
+      pushLog(p, "Recipe materials unknown.");
       return;
     }
+    const need = preview.map((m) => `${m.name} ×${m.qty}`).join(", ");
+    pushLog(p, `Need materials: ${need}.`);
+    return;
   }
   for (const mat of mats) {
     if (!takeMat(p, mat.slug, mat.qty)) {
