@@ -172,7 +172,7 @@ export const AREAS: Record<AreaId, AreaDef> = {
         id: "ph-ruin-dweller",
         name: "Ruin Dweller",
         tags: ["construct", "ruin"],
-        drops: ["cracked-brick", "metal-scrap", "pale-dust"],
+        drops: ["cracked-brick", "metal-scrap", "pale-dust", "chainmail"],
       },
       {
         id: "ph-bandit",

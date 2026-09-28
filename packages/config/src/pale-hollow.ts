@@ -1603,6 +1603,12 @@ export type PaleHollowArchetype =
 
 export type PaleHollowAggro = "safe" | "proximity" | "sight" | "sound";
 
+export type PaleHollowRareDrop = {
+  slug: string;
+  /** Absolute drop chance in [0, 1] (independent of the flat 65% mat roll). */
+  chance: number;
+};
+
 export type PaleHollowMobDef = {
   id: string;
   name: string;
@@ -1615,6 +1621,8 @@ export type PaleHollowMobDef = {
   linkRange?: number;
   hp: number;
   drops: string[];
+  /** Optional rare gear — rolled once per kill at the given chance. */
+  rareDrops?: PaleHollowRareDrop[];
 };
 
 export const PH_SEGMENT_A_MOBS: PaleHollowMobDef[] = [
@@ -1655,10 +1663,10 @@ export const PH_SEGMENT_B_MOBS: PaleHollowMobDef[] = [
 ];
 
 export const PH_SEGMENT_C_MOBS: PaleHollowMobDef[] = [
-  { id: "ph-dwell-1", name: "Ruin Dweller", x: -4, z: 132, level: 11, archetype: "ruin_dweller", aggro: "sight", aggroRange: 10, linkRange: 8, hp: 260, drops: ["cracked-brick", "pale-dust"] },
-  { id: "ph-dwell-2", name: "Ruin Dweller", x: 12, z: 142, level: 11, archetype: "ruin_dweller", aggro: "sight", aggroRange: 10, linkRange: 8, hp: 260, drops: ["cracked-brick"] },
-  { id: "ph-dwell-3", name: "Ruin Dweller", x: -16, z: 156, level: 12, archetype: "ruin_dweller", aggro: "sight", aggroRange: 10, linkRange: 8, hp: 290, drops: ["cracked-brick", "bone-chip"] },
-  { id: "ph-dwell-4", name: "Ruin Dweller", x: 22, z: 164, level: 13, archetype: "ruin_dweller", aggro: "sight", aggroRange: 11, linkRange: 8, hp: 310, drops: ["cracked-brick", "pale-dust"] },
+  { id: "ph-dwell-1", name: "Ruin Dweller", x: -4, z: 132, level: 11, archetype: "ruin_dweller", aggro: "sight", aggroRange: 10, linkRange: 8, hp: 260, drops: ["cracked-brick", "pale-dust"], rareDrops: [{ slug: "chainmail", chance: 0.01 }] },
+  { id: "ph-dwell-2", name: "Ruin Dweller", x: 12, z: 142, level: 11, archetype: "ruin_dweller", aggro: "sight", aggroRange: 10, linkRange: 8, hp: 260, drops: ["cracked-brick"], rareDrops: [{ slug: "chainmail", chance: 0.01 }] },
+  { id: "ph-dwell-3", name: "Ruin Dweller", x: -16, z: 156, level: 12, archetype: "ruin_dweller", aggro: "sight", aggroRange: 10, linkRange: 8, hp: 290, drops: ["cracked-brick", "bone-chip"], rareDrops: [{ slug: "chainmail", chance: 0.01 }] },
+  { id: "ph-dwell-4", name: "Ruin Dweller", x: 22, z: 164, level: 13, archetype: "ruin_dweller", aggro: "sight", aggroRange: 11, linkRange: 8, hp: 310, drops: ["cracked-brick", "pale-dust"], rareDrops: [{ slug: "chainmail", chance: 0.01 }] },
   { id: "ph-adder-1", name: "Cliff Adder", x: 54, z: 142, level: 12, archetype: "cliff_adder", aggro: "proximity", aggroRange: 3.2, hp: 180, drops: ["soft-pelt", "pale-dust"] },
   { id: "ph-adder-2", name: "Cliff Adder", x: -56, z: 155, level: 13, archetype: "cliff_adder", aggro: "proximity", aggroRange: 3.2, hp: 190, drops: ["soft-pelt"] },
   { id: "ph-adder-3", name: "Cliff Adder", x: 50, z: 170, level: 14, archetype: "cliff_adder", aggro: "proximity", aggroRange: 3.5, hp: 210, drops: ["soft-pelt", "bone-chip"] },
@@ -1671,8 +1679,8 @@ export const PH_SEGMENT_D_MOBS: PaleHollowMobDef[] = [
   { id: "ph-wight-1", name: "Shard Wight", x: -18, z: 208, level: 16, archetype: "shard_wight", aggro: "sight", aggroRange: 9, linkRange: 6, hp: 340, drops: ["bone-chip", "pale-dust"] },
   { id: "ph-wight-2", name: "Shard Wight", x: -14, z: 216, level: 17, archetype: "shard_wight", aggro: "sight", aggroRange: 9, linkRange: 6, hp: 360, drops: ["bone-chip"] },
   { id: "ph-wight-3", name: "Shard Wight", x: -24, z: 212, level: 18, archetype: "shard_wight", aggro: "sight", aggroRange: 9, linkRange: 6, hp: 380, drops: ["bone-chip", "pale-dust"] },
-  { id: "ph-dwell-d1", name: "Ruin Dweller", x: 6, z: 206, level: 15, archetype: "ruin_dweller", aggro: "sight", aggroRange: 10, linkRange: 7, hp: 320, drops: ["cracked-brick"] },
-  { id: "ph-dwell-d2", name: "Ruin Dweller", x: 28, z: 228, level: 16, archetype: "ruin_dweller", aggro: "sight", aggroRange: 10, hp: 340, drops: ["cracked-brick", "linen-scrap"] },
+  { id: "ph-dwell-d1", name: "Ruin Dweller", x: 6, z: 206, level: 15, archetype: "ruin_dweller", aggro: "sight", aggroRange: 10, linkRange: 7, hp: 320, drops: ["cracked-brick"], rareDrops: [{ slug: "chainmail", chance: 0.01 }] },
+  { id: "ph-dwell-d2", name: "Ruin Dweller", x: 28, z: 228, level: 16, archetype: "ruin_dweller", aggro: "sight", aggroRange: 10, hp: 340, drops: ["cracked-brick", "linen-scrap"], rareDrops: [{ slug: "chainmail", chance: 0.01 }] },
 ];
 
 export const PH_ALL_MOBS: PaleHollowMobDef[] = [

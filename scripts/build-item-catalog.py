@@ -54,6 +54,12 @@ def budget(lv: int) -> int:
     return max(1, lv // 5 + 1)
 
 
+# Per-slug combat stat overrides (rare drops / hand-tuned gear). Applied after build_stats().
+STAT_OVERRIDES: dict[str, dict] = {
+    "chainmail": {"str": 5, "dex": 5, "agi": 5, "def": 10},
+}
+
+
 def parse_jobs(jobs: str) -> list[str] | str:
     j = (jobs or "").strip()
     if not j or j.lower().startswith("mat") or j.lower() in (
@@ -465,6 +471,8 @@ def main() -> None:
         jobs = entry["jobs"]
         slot = infer_slot(name, kind) if kind == "equipment" else None
         stats = build_stats(name, kind, lv, slot, jobs)
+        if entry["slug"] in STAT_OVERRIDES:
+            stats = dict(STAT_OVERRIDES[entry["slug"]])
         # pull delay out of stats if old helper put it there — we don't
         delay = None
         if kind == "equipment" and slot == "main":

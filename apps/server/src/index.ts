@@ -310,6 +310,7 @@ type Mob = {
   linkRange: number;
   fleeUntil: number;
   drops: string[];
+  rareDrops: { slug: string; chance: number }[];
   archetype: string;
   /** Idle wander waypoint (NaN = none). */
   roamTx: number;
@@ -406,6 +407,7 @@ function spawnFieldMob(
     aggroRange: number;
     linkRange?: number;
     drops: string[];
+    rareDrops?: { slug: string; chance: number }[];
     archetype: string;
   },
 ): Mob {
@@ -425,6 +427,7 @@ function spawnFieldMob(
     aggroRange: opts.aggroRange,
     linkRange: opts.linkRange ?? 0,
     drops: [...opts.drops],
+    rareDrops: [...(opts.rareDrops ?? [])],
     archetype: opts.archetype,
     roamTx: Number.NaN,
     roamTz: Number.NaN,
@@ -441,6 +444,7 @@ function spawnSegmentAPack(): Mob[] {
       aggroRange: f.aggroRange,
       linkRange: f.linkRange,
       drops: f.drops,
+      rareDrops: f.rareDrops,
       archetype: f.archetype,
     }),
   );
@@ -1383,6 +1387,18 @@ function rewardMobKill(p: Player, mob: Mob, now: number) {
     if (Math.random() < 0.65) {
       grantBaseMat(p, mat, 1);
       dropNotes.push(matDisplayName(mat));
+    }
+  }
+  for (const rare of mob.rareDrops ?? []) {
+    if (Math.random() < rare.chance) {
+      const def = CATALOG_BY_SLUG[rare.slug];
+      if (def) {
+        addItem(p.inventory, def.id, 1);
+        dropNotes.push(def.name);
+      } else {
+        grantBaseMat(p, rare.slug, 1);
+        dropNotes.push(matDisplayName(rare.slug));
+      }
     }
   }
   pushLog(

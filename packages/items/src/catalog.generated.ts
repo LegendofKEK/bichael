@@ -9054,6 +9054,30 @@ export const CATALOG: ItemDef[] = [
     "slug": "throne-dust",
     "kind": "base",
     "obtainedFrom": "Harvest/Drop — Throne Approach, zone-wide"
+  },
+  {
+    "id": 1062,
+    "name": "Chainmail",
+    "description": "Chainmail. Drop — Ruin Dweller (1%), Pale Hollow.",
+    "icon": "/icons/items/chainmail.png",
+    "slug": "chainmail",
+    "kind": "equipment",
+    "craftLevel": 10,
+    "craftSkill": "smithing",
+    "stats": {
+      "str": 5,
+      "dex": 5,
+      "agi": 5,
+      "def": 10
+    },
+    "slot": "body",
+    "jobRestrict": [
+      "knight",
+      "fighter",
+      "cleric",
+      "rogue",
+      "battlemage"
+    ]
   }
 ] as ItemDef[];
 
