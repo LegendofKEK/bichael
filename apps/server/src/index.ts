@@ -106,11 +106,14 @@ import {
 } from "@bellgrave/items";
 import { createPaleHollowMobs, createPaleHollowNodes, relocateGatherNode, type FieldNode } from "./pale-hollow-world";
 import {
+  MOB_CAST_ANIM_MS,
+  MOB_CAST_WINDUP_MS,
   mobAutoAttackRoll,
   mobEngageRange,
   mobMpForJob,
   resolveMobJob,
   tryMobJobAbility,
+  type PendingMobCastResolve,
 } from "./mob-job-ai";
 import type {
   AbilityId,
@@ -346,6 +349,14 @@ type Mob = {
   job: JobId;
   level: number;
   nextAbilityAt: number;
+  /** Unix ms when pending cast resolves (0 = none). Tell leads the hit. */
+  pendingCastHitAt: number;
+  pendingCastTarget: string | null;
+  pendingCastKind: "" | "damage" | "slow" | "miss";
+  pendingCastDmg: number;
+  pendingCastLog: string;
+  pendingCastSlowMs: number;
+  pendingCastMovePct: number;
   atkBuffUntil: number;
   atkBuffMul: number;
   /** Idle wander waypoint (NaN = none). */
@@ -492,6 +503,13 @@ function spawnFieldMob(
     job,
     level,
     nextAbilityAt: 0,
+    pendingCastHitAt: 0,
+    pendingCastTarget: null,
+    pendingCastKind: "",
+    pendingCastDmg: 0,
+    pendingCastLog: "",
+    pendingCastSlowMs: 0,
+    pendingCastMovePct: 0,
     atkBuffUntil: 0,
     atkBuffMul: 1,
     roamTx: Number.NaN,
@@ -1605,6 +1623,7 @@ function rewardMobKill(p: Player, mob: Mob, now: number) {
   mob.hp = 0;
   mob.alive = false;
   mob.anim = "dead";
+  clearMobPendingCast(mob);
   mob.deathAt = now;
   // Fade out, then wait MOB_RESPAWN_MS after vanishing before returning.
   mob.respawnAt = now + MOB_DEATH_FADE_MS + MOB_RESPAWN_MS;
@@ -2473,6 +2492,128 @@ function playerSwing(p: Player, now: number) {
   }
 }
 
+
+function clearMobPendingCast(mob: Mob) {
+  mob.pendingCastHitAt = 0;
+  mob.pendingCastTarget = null;
+  mob.pendingCastKind = "";
+  mob.pendingCastDmg = 0;
+  mob.pendingCastLog = "";
+  mob.pendingCastSlowMs = 0;
+  mob.pendingCastMovePct = 0;
+}
+
+function scheduleMobPendingCast(
+  mob: Mob,
+  now: number,
+  targetWallet: string,
+  resolve: PendingMobCastResolve,
+) {
+  mob.pendingCastHitAt = now + MOB_CAST_WINDUP_MS;
+  mob.pendingCastTarget = targetWallet;
+  mob.pendingCastKind = resolve.type;
+  mob.pendingCastDmg = resolve.type === "damage" ? resolve.dmg : 0;
+  mob.pendingCastLog = resolve.log;
+  mob.pendingCastSlowMs = resolve.type === "slow" ? resolve.durationMs : 0;
+  mob.pendingCastMovePct = resolve.type === "slow" ? resolve.movePct : 0;
+}
+
+/** Apply pending cast damage with the same absorbs as a live swing. */
+function applyPendingMobDamage(mob: Mob, target: Player, now: number, rawDmg: number, hitLog: string) {
+  let dmg = rawDmg;
+  if (target.zoneId === "pale_hollow") {
+    const b = paleHollowBiome(mob.x, mob.z);
+    if (mob.archetype === "pale_slime" && (b === "river" || b === "riverbank")) {
+      dmg = Math.max(1, Math.floor(dmg * 1.25));
+    }
+    if (mob.archetype === "cliff_adder" && b === "vine_cliff") {
+      dmg = Math.max(1, Math.floor(dmg * 1.15));
+    }
+  }
+  dmg = Math.max(0, Math.floor(dmg * playerPhysDtMul(target, now)));
+  dmg = absorbStoneskin(target, now, dmg);
+  const beforeShield = target.healAbsorbHp;
+  dmg = absorbHealShield(target, now, dmg);
+  const soaked = Math.max(0, beforeShield - target.healAbsorbHp);
+  dmg = Math.max(0, Math.floor(dmg * fighterDefenseMul(target, now)));
+  const wall = absorbManaWall(target, now, dmg);
+  dmg = wall.dmg;
+  if (dmg <= 0) {
+    pushLog(
+      target,
+      soaked > 0
+        ? `${mob.name}'s blow is swallowed by your Solace shield!`
+        : wall.bled > 0
+          ? `${mob.name}'s blow bleeds ${wall.bled} MP through Mana Wall!`
+          : `${mob.name}'s blow glances off your ward!`,
+    );
+    return;
+  }
+  target.hp = Math.max(0, target.hp - dmg);
+  if (target.miseryRite) {
+    target.miseryEmpowerUntil = now + 15_000;
+  }
+  stopRest(target, `${mob.name}'s blow breaks your rest!`);
+  const notes: string[] = [];
+  if (soaked > 0) notes.push(`${soaked} absorbed`);
+  if (wall.bled > 0) notes.push(`${wall.bled} MP`);
+  if (now < mob.addleUntil) notes.push("Addled");
+  const base = hitLog.endsWith(".") ? hitLog.slice(0, -1) : hitLog;
+  pushLog(target, notes.length > 0 ? `${base} (${notes.join(", ")}).` : `${base}.`);
+}
+
+/**
+ * Resolve a cast that finished wind-up. Self-contained so chase / CC early
+ * returns cannot skip the hit after the tell has played.
+ */
+function resolveMobPendingCast(mob: Mob, now: number) {
+  if (!mob.pendingCastHitAt || now < mob.pendingCastHitAt) return;
+  if (!mob.alive) {
+    clearMobPendingCast(mob);
+    return;
+  }
+  const targetWallet = mob.pendingCastTarget;
+  const kind = mob.pendingCastKind;
+  const dmg = mob.pendingCastDmg;
+  const log = mob.pendingCastLog;
+  const slowMs = mob.pendingCastSlowMs;
+  const movePct = mob.pendingCastMovePct;
+  clearMobPendingCast(mob);
+
+  if (!targetWallet) return;
+  const target = players.get(targetWallet);
+  if (!target || target.hp <= 0) return;
+
+  if (kind === "miss") {
+    pushLog(target, log);
+    return;
+  }
+  if (kind === "slow") {
+    target.slowUntil = Math.max(target.slowUntil, now + slowMs);
+    target.moveUntil = Math.max(target.moveUntil, now + slowMs);
+    target.movePct = Math.min(target.movePct, movePct);
+    pushLog(target, log);
+    return;
+  }
+  if (kind === "damage") {
+    applyPendingMobDamage(mob, target, now, dmg, log);
+    if (target.hp <= 0) {
+      if (now < target.reraiseUntil) {
+        target.reraiseUntil = 0;
+        target.hp = Math.max(1, Math.floor(target.maxHp * 0.25));
+        target.sacredLightUntil = now + 2200;
+        pushLog(target, "Ember Vigil — you rise in sacred light!");
+      } else {
+        respawnAtHub(target);
+        if (mob.shiny && !mob.shinyClone) {
+          shinyFleeAfterPlayerKill(mob, now);
+          pushLog(target, mob.name + " flees into the Hollow...");
+        }
+      }
+    }
+  }
+}
+
 function mobSwing(mob: Mob, now: number) {
   if (!mob.alive) return;
   if (now < (mob.fleeUntil ?? 0)) return;
@@ -2481,18 +2622,22 @@ function mobSwing(mob: Mob, now: number) {
   if (mob.aggro === "safe") {
     if (!(mob.shiny || mob.shinyClone) || !mob.targetId) return;
   }
+  // Cast wind-up resolve first so the tell always leads the hit.
+  resolveMobPendingCast(mob, now);
   if (
     now < mob.stunUntil ||
     now < mob.petrifyUntil ||
     now < mob.bindUntil ||
     now < mob.sleepUntil
   ) {
+    clearMobPendingCast(mob);
     mob.anim = "idle";
     mob.targetId = null;
     return;
   }
   // Temporal mute (Silencega) — forget the fight until it wears off.
   if (now < mob.silenceUntil) {
+    clearMobPendingCast(mob);
     mob.anim = "idle";
     mob.targetId = null;
     return;
@@ -2547,9 +2692,11 @@ function mobSwing(mob: Mob, now: number) {
   }
 
   if (now < mob.nextSwingAt) {
-    if (now >= mob.animUntil && mob.anim !== "walk") mob.anim = "idle";
+    if (now >= mob.animUntil && mob.anim !== "walk" && !mob.pendingCastHitAt) mob.anim = "idle";
     return;
   }
+  // Don't start a new swing while a cast tell is still winding up.
+  if (mob.pendingCastHitAt) return;
   if (now < mob.paraUntil && Math.random() < 0.35) {
     mob.nextSwingAt = now + 800;
     pushLog(nearest, `${mob.name} seizes up (Paralyze).`);
@@ -2615,7 +2762,7 @@ function mobSwing(mob: Mob, now: number) {
     pushLog(nearest, notes.length > 0 ? `${base} (${notes.join(", ")}).` : `${base}.`);
   };
 
-  const usedAbility = tryMobJobAbility(mob, {
+  const ability = tryMobJobAbility(mob, {
     now,
     dist: d,
     player: nearest,
@@ -2624,19 +2771,36 @@ function mobSwing(mob: Mob, now: number) {
     applyPlayerDamage: (raw, note) => applyMobDamage(raw, note),
   });
 
-  if (!usedAbility) {
+  if (ability.ok) {
+    if (ability.pending) scheduleMobPendingCast(mob, now, nearest.wallet, ability.pending);
+  } else {
     const swingSlow = now < mob.slowUntil ? mob.swingPenalty : 0;
     mob.nextSwingAt = now + swingDelayMs(2400, -swingSlow);
     const roll = mobAutoAttackRoll(mob, vitals, now);
     mob.anim = roll.anim;
-    mob.animUntil = now + (roll.anim === "cast" ? 560 : 480);
-    if (!roll.hit) {
-      pushLog(nearest, `${mob.name} misses you.`);
-      return;
+    if (roll.anim === "cast") {
+      // Magic auto — cast anim + circle first; damage (or miss) after wind-up.
+      mob.animUntil = now + MOB_CAST_ANIM_MS;
+      if (!roll.hit) {
+        scheduleMobPendingCast(mob, now, nearest.wallet, {
+          type: "miss",
+          log: `${mob.name} misses you.`,
+        });
+      } else {
+        scheduleMobPendingCast(mob, now, nearest.wallet, {
+          type: "damage",
+          dmg: roll.dmg,
+          log: `${mob.name} strikes you with magic for ${roll.dmg}.`,
+        });
+      }
+    } else {
+      mob.animUntil = now + 480;
+      if (!roll.hit) {
+        pushLog(nearest, `${mob.name} misses you.`);
+        return;
+      }
+      applyMobDamage(roll.dmg, `${mob.name} hits you for ${roll.dmg}`);
     }
-    const verb =
-      roll.anim === "cast" ? `strikes you with magic for ${roll.dmg}` : `hits you for ${roll.dmg}`;
-    applyMobDamage(roll.dmg, `${mob.name} ${verb}`);
   }
 
   if (nearest.hp <= 0) {

@@ -156,6 +156,20 @@ const JOB_ABILITIES: Record<JobId, AbilityPick[]> = {
   ],
 };
 
+/** Cast tell duration before damage / Slow resolve (ms). */
+export const MOB_CAST_WINDUP_MS = 550;
+/** Full cast anim window — covers wind-up + resolve flash. */
+export const MOB_CAST_ANIM_MS = 1000;
+
+export type PendingMobCastResolve =
+  | { type: "damage"; dmg: number; log: string }
+  | { type: "slow"; durationMs: number; movePct: number; log: string }
+  | { type: "miss"; log: string };
+
+export type MobAbilityResult =
+  | { ok: false }
+  | { ok: true; pending?: PendingMobCastResolve };
+
 export type MobAbilityHooks = {
   now: number;
   dist: number;
@@ -169,17 +183,17 @@ export type MobAbilityHooks = {
  * Try a job ability. Returns true if it consumed the swing/cast slot
  * (caller should skip auto-attack).
  */
-export function tryMobJobAbility(mob: MobJobCombatant, hooks: MobAbilityHooks): boolean {
+export function tryMobJobAbility(mob: MobJobCombatant, hooks: MobAbilityHooks): MobAbilityResult {
   const { now, dist, player, vitals, pushLog, applyPlayerDamage } = hooks;
-  if (now < (mob.nextAbilityAt ?? 0)) return false;
+  if (now < (mob.nextAbilityAt ?? 0)) return { ok: false };
   // ~35% chance each ready swing to spend an ability instead of auto
-  if (Math.random() > 0.38) return false;
+  if (Math.random() > 0.38) return { ok: false };
 
   const picks = JOB_ABILITIES[mob.job] ?? [];
   const ready = picks.filter(
     (a) => dist >= a.minRange && dist <= a.maxRange && mob.mp >= a.mp,
   );
-  if (ready.length === 0) return false;
+  if (ready.length === 0) return { ok: false };
   // Prefer self-heal when hurt
   let choice = ready[Math.floor(Math.random() * ready.length)]!;
   if (mob.hp < mob.maxHp * 0.45) {
@@ -198,30 +212,34 @@ export function tryMobJobAbility(mob: MobJobCombatant, hooks: MobAbilityHooks): 
       mob.atkBuffUntil = now + 12_000;
       mob.atkBuffMul = 1.35;
       mob.anim = "cast";
-      mob.animUntil = now + 420;
+      mob.animUntil = now + MOB_CAST_ANIM_MS;
       mob.nextSwingAt = now + 900;
       pushLog(`${mob.name} flies into a Berserk rage!`);
-      return true;
+      return { ok: true };
     }
     case "mob_mend": {
       const heal = Math.max(8, Math.floor(mob.maxHp * 0.18 + stats.mnd * 1.2));
       mob.hp = Math.min(mob.maxHp, mob.hp + heal);
       mob.anim = "cast";
-      mob.animUntil = now + 500;
+      mob.animUntil = now + MOB_CAST_ANIM_MS;
       mob.nextSwingAt = now + 1100;
       pushLog(`${mob.name} mends for ${heal} HP.`);
-      return true;
+      return { ok: true };
     }
     case "mob_slow": {
-      player.slowUntil = Math.max(player.slowUntil, now + 8_000);
-      // Soft move penalty (player kit uses movePct for Chrono-style tempo).
-      player.moveUntil = Math.max(player.moveUntil, now + 8_000);
-      player.movePct = Math.min(player.movePct, -0.22);
+      // Wind-up first — Slow resolves after MOB_CAST_WINDUP_MS so the tell leads.
       mob.anim = "cast";
-      mob.animUntil = now + 520;
+      mob.animUntil = now + MOB_CAST_ANIM_MS;
       mob.nextSwingAt = now + swingDelayMs(2200, 0);
-      pushLog(`${mob.name} casts Slow — your tempo drags!`);
-      return true;
+      return {
+        ok: true,
+        pending: {
+          type: "slow",
+          durationMs: 8_000,
+          movePct: -0.22,
+          log: `${mob.name} casts Slow — your tempo drags!`,
+        },
+      };
     }
     case "mob_shield_bash": {
       const att = Math.max(1, Math.floor(attackFromStats(stats, false, mobWeaponBonus(mob.job), { physical: true }) * atkMul * downMul));
@@ -236,7 +254,7 @@ export function tryMobJobAbility(mob: MobJobCombatant, hooks: MobAbilityHooks): 
       mob.animUntil = now + 480;
       mob.nextSwingAt = now + swingDelayMs(2600, 0);
       applyPlayerDamage(dmg, `${mob.name} Shield Bashes you for ${dmg}.`);
-      return true;
+      return { ok: true };
     }
     case "mob_backstab": {
       const att = Math.max(1, Math.floor(attackFromStats(stats, false, mobWeaponBonus(mob.job), { physical: true }) * atkMul * downMul));
@@ -248,7 +266,7 @@ export function tryMobJobAbility(mob: MobJobCombatant, hooks: MobAbilityHooks): 
       mob.animUntil = now + 420;
       mob.nextSwingAt = now + swingDelayMs(2200, 0);
       applyPlayerDamage(dmg, crit ? `${mob.name} Backstabs you for ${dmg} (Critical)!` : `${mob.name} Backstabs you for ${dmg}.`);
-      return true;
+      return { ok: true };
     }
     case "mob_power_strike": {
       const att = Math.max(1, Math.floor(attackFromStats(stats, false, mobWeaponBonus(mob.job) + 2, { physical: true }) * atkMul * downMul));
@@ -259,7 +277,7 @@ export function tryMobJobAbility(mob: MobJobCombatant, hooks: MobAbilityHooks): 
       mob.animUntil = now + 500;
       mob.nextSwingAt = now + swingDelayMs(2500, 0);
       applyPlayerDamage(dmg, `${mob.name} uses ${choice.label} for ${dmg}.`);
-      return true;
+      return { ok: true };
     }
     case "mob_arc_blade": {
       const att = Math.max(
@@ -277,7 +295,7 @@ export function tryMobJobAbility(mob: MobJobCombatant, hooks: MobAbilityHooks): 
       mob.animUntil = now + 460;
       mob.nextSwingAt = now + swingDelayMs(2300, 0);
       applyPlayerDamage(dmg, `${mob.name}'s Arc Blade hits for ${dmg}.`);
-      return true;
+      return { ok: true };
     }
     case "mob_ember_bolt": {
       // Magic bolt — INT/MND based, ignores some physical def
@@ -286,13 +304,19 @@ export function tryMobJobAbility(mob: MobJobCombatant, hooks: MobAbilityHooks): 
       let dmg = Math.max(1, power - resist + 6);
       if (now < mob.addleUntil) dmg = Math.max(1, Math.floor(dmg * 0.65));
       mob.anim = "cast";
-      mob.animUntil = now + 560;
+      mob.animUntil = now + MOB_CAST_ANIM_MS;
       mob.nextSwingAt = now + swingDelayMs(2400, 0);
-      applyPlayerDamage(dmg, `${mob.name} casts ${choice.label} for ${dmg}.`);
-      return true;
+      return {
+        ok: true,
+        pending: {
+          type: "damage",
+          dmg,
+          log: `${mob.name} casts ${choice.label} for ${dmg}.`,
+        },
+      };
     }
     default:
-      return false;
+      return { ok: false };
   }
 }
 
