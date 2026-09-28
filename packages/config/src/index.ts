@@ -155,6 +155,19 @@ export {
 
 export { paleHollowLandmarks, type PaleHollowLandmark } from "./pale-hollow-landmarks";
 
+export {
+  SHINY_HQ_CHANCE_DEFAULT,
+  SHINY_LEVEL_BONUS,
+  SHINY_CLONE_COUNT,
+  SHINY_MAT_DROP_CHANCE,
+  SHINY_FLEE_RELOCATE_MS,
+  SHINY_LOOT_BY_ARCHETYPE,
+  shinyHqChance,
+  shinyLootTable,
+  shinyScaledHp,
+  shinyDisplayName,
+} from "./shiny-hq";
+
 /**
  * Zone catalog — music URL loops; omit / undefined music = keep previous track.
  * Field zones = areas; hub zones = cities. `palace_hall` aliases Citadel of KEK (MVP slice).

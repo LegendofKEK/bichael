@@ -197,6 +197,10 @@ export type UnitSnapshot = {
   gatherYield?: string;
   /** Mob sprite set */
   archetype?: string;
+  /** Field mob level (nameplates / shiny HQ). */
+  level?: number;
+  /** Shiny HQ - client sparkle/tint; same sprite as archetype. */
+  shiny?: boolean;
   /** Unix ms when this mob died — client fades corpse until MOB_DEATH_FADE_MS. */
   deathAt?: number;
 };
