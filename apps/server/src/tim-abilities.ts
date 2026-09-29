@@ -6,7 +6,7 @@ import {
   type Stance,
   type TimAbilityId,
   isTimAbilityId,
-  isTimSpell,
+    isTrainerFreeAbility,
 } from "@bellgrave/combat";
 import { ITEM } from "@bellgrave/config";
 import type { AbilityId } from "@bellgrave/protocol";
@@ -40,8 +40,8 @@ export type TimPlayer = {
   timeSealUntil: number;
   perpetualUntil: number;
   lastEnfeeble: TimAbilityId | null;
-  /** Purchased TIM spells. */
-  learned: TimAbilityId[];
+  /** Abilities purchased from the Trainer. */
+  learned: AbilityId[];
 };
 
 export type TimMob = {
@@ -201,8 +201,8 @@ export function resolveTimAbility(
     hooks.pushLog(`${def.label} unlocks at level ${def.unlockLevel}.`);
     return;
   }
-  if (isTimSpell(id) && !p.learned.includes(id)) {
-    hooks.pushLog(`You have not learned ${def.label}. Visit the Chronomancer.`);
+  if (!isTrainerFreeAbility(id) && !p.learned.includes(id)) {
+    hooks.pushLog(`You have not learned ${def.label}. Visit the Trainer.`);
     return;
   }
   if (!opts.free) {

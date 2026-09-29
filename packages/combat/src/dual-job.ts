@@ -9,7 +9,6 @@ import {
   type Vitals,
 } from "./grades";
 import { abilitiesUnlockedForJob, type AbilityId } from "./abilities";
-import type { TimAbilityId } from "./tim-kit";
 
 /** Main job level required before a support job can be set. */
 export const SUBJOB_UNLOCK_LEVEL = 10;
@@ -64,7 +63,7 @@ export function abilitiesUnlockedDual(
   main: JobId,
   level: number,
   sub: JobId | null | undefined,
-  learned: readonly TimAbilityId[] = [],
+  learned: readonly string[] = [],
 ): AbilityId[] {
   const mainAb = abilitiesUnlockedForJob(main, level, learned);
   if (!sub || level < SUBJOB_UNLOCK_LEVEL || sub === main) return mainAb;

@@ -966,7 +966,7 @@ export function Hud() {
           <div className="spellbook-list mmo-scroll" role="tabpanel">
             {bookIds.length === 0 && (
               <p className="spellbook-empty">
-                No abilities yet — buy spells from the Chronomancer (west tent).
+                No abilities yet — buy from the Trainer (west tent).
               </p>
             )}
             {tabIds.map((id) => (
@@ -1089,7 +1089,7 @@ function JobMasterDialog() {
   const you = useGame((s) => s.snapshot?.you);
   if (!dialog) return null;
 
-  const isTrainer = Boolean(dialog.spells) || dialog.npcId === "npc-chronomancer";
+  const isTrainer = Boolean(dialog.spells) || dialog.npcId === "npc-ph-chronomancer" || dialog.npcId === "npc-chronomancer";
   const jobs = (dialog.jobs ?? []) as JobId[];
   const spells = dialog.spells ?? [];
   // Support job from L10 through max — use live level so Max Lv refreshes an open dialog

@@ -2,20 +2,23 @@ import {
   JOBS,
   MAX_LEVEL,
   REST_TICK,
-  TIM_ABILITIES,
   SUBJOB_UNLOCK_LEVEL,
   FREE_STAT_POINTS,
   SKILL_POINTS_PER_LEVEL,
   SKILL_PRESTIGE_CAP,
   SKILL_NODES,
   abilitiesUnlockedDual,
+  abilityLabel,
+  abilityUnlockLevel,
+  trainerAbilityDustCost,
+  trainerOffersForJobs,
+  isTrainerFreeAbility,
   aggregateSkillBonuses,
   attackFromStats,
   canUnlockSkillNode,
   combinedJobVitals,
   deriveCharacterAttributes,
   defenseFromVit,
-  effectiveJobLevel,
   evasionFromAgi,
   critFromAgi,
   freeSkillHubs,
@@ -34,7 +37,6 @@ import {
   isSkillNodeId,
   isSorcererAbilityId,
   isTimAbilityId,
-  isTimSpell,
   physicalDamage,
   skillHubForJob,
   skillPointsEarned,
@@ -43,9 +45,7 @@ import {
   subjobLevel,
   swingDelayMs,
   resolveSwingDelayMs,
-  TIM_ABILITY_IDS,
-  timSpellDustCost,
-  timSpellsForSale,
+  abilityIdsForJob,
   weaponTpUnlocked,
   weaponTypeFromTokenId,
   isWeaponTpAbilityId,
@@ -215,8 +215,8 @@ type Player = {
   timeSealUntil: number;
   perpetualUntil: number;
   lastEnfeeble: TimAbilityId | null;
-  /** Purchased TIM spells. */
-  learned: TimAbilityId[];
+  /** Abilities purchased from the Trainer (persists across jobs). */
+  learned: AbilityId[];
   /** Master skill tree unlocked nodes (includes free main hub). */
   skillUnlocked: string[];
   /** Unspent skill-tree points (bank; grant on level-up / echoes, spend on unlock). */
@@ -419,9 +419,10 @@ const JOB_MASTER = {
   facing: -Math.PI / 2,
 } as const;
 
-const CHRONOMANCER = {
+/** Pale Hollow Trainer (stable id npc-ph-chronomancer — rename is player-facing). */
+const TRAINER = {
   id: "npc-ph-chronomancer",
-  name: "Chronomancer",
+  name: "Trainer",
   x: -3.2,
   z: 4.8,
   facing: Math.PI,
@@ -1280,6 +1281,23 @@ function mobBuffs(m: Mob): UnitSnapshot["buffs"] {
   };
 }
 
+
+/** Recompute / return unlocked abilities for a player (job + Trainer purchases + weapon skills). */
+function ensurePlayerUnlocked(p: Player): AbilityId[] {
+  const learned = Array.isArray(p.learned) ? p.learned : [];
+  const unlockKey = `${p.job}|${p.subjob ?? ""}|${p.level}|${p.equip.main ?? ""}|${learned.length}`;
+  if (p.unlockCacheKey !== unlockKey || !p.unlockCache) {
+    const jobUnlocked = abilitiesUnlockedDual(p.job, p.level, p.subjob, learned) as AbilityId[];
+    const wsUnlocked = weaponTpUnlocked(
+      weaponTypeFromTokenId(p.equip.main),
+      p.level,
+    ) as AbilityId[];
+    p.unlockCache = Array.from(new Set<AbilityId>([...jobUnlocked, ...wsUnlocked]));
+    p.unlockCacheKey = unlockKey;
+  }
+  return p.unlockCache;
+}
+
 function snapshotFor(p: Player): SnapshotMessage {
   const units: UnitSnapshot[] = [];
   /** Only stream nearby field content — full corridor would flood client. */
@@ -1347,11 +1365,11 @@ function snapshotFor(p: Player): SnapshotMessage {
   const hubNpcs = [
     ...PH_HUB_NPCS,
     {
-      id: CHRONOMANCER.id,
-      name: CHRONOMANCER.name,
-      x: CHRONOMANCER.x,
-      z: CHRONOMANCER.z,
-      facing: CHRONOMANCER.facing,
+      id: TRAINER.id,
+      name: TRAINER.name,
+      x: TRAINER.x,
+      z: TRAINER.z,
+      facing: TRAINER.facing,
       role: "spell_trainer" as const,
     },
   ];
@@ -1406,7 +1424,7 @@ function snapshotFor(p: Player): SnapshotMessage {
     });
   }
 
-  const learned = p.job === "time_mage" || p.subjob === "time_mage" ? p.learned : [];
+  const learned = Array.isArray(p.learned) ? p.learned : [];
   const unlockKey = `${p.job}|${p.subjob ?? ""}|${p.level}|${p.equip.main ?? ""}|${learned.length}`;
   if (p.unlockCacheKey !== unlockKey || !p.unlockCache) {
     const jobUnlocked = abilitiesUnlockedDual(p.job, p.level, p.subjob, learned) as AbilityId[];
@@ -1983,7 +2001,14 @@ function handleAbility(p: Player, id: AbilityId, targetId?: string) {
     });
     return;
   }
-  // Dispatch by kit ownership — main or support job may grant the ability
+  {
+    const unlocked = ensurePlayerUnlocked(p);
+    if (!unlocked.includes(id)) {
+      pushLog(p, `You have not learned ${abilityLabel(id)}. Visit the Trainer.`);
+      return;
+    }
+  }
+    // Dispatch by kit ownership — main or support job may grant the ability
   if (isRogueAbilityId(id) && playerHasJob(p, "rogue")) {
     resolveRogueAbility(p, id, targetId, now, {
       pushLog: (pl, msg) => pushLog(pl as Player, msg),
@@ -2132,39 +2157,25 @@ function handleNpcInteract(p: Player, npcId: string) {
     return;
   }
 
-  if (npcId === CHRONOMANCER.id) {
-    const d = dist(p.x, p.z, CHRONOMANCER.x, CHRONOMANCER.z);
+  if (npcId === TRAINER.id) {
+    const d = dist(p.x, p.z, TRAINER.x, TRAINER.z);
     if (d > NPC_INTERACT_RANGE) {
-      pushLog(p, "Step closer to the Chronomancer.");
+      pushLog(p, "Step closer to the Trainer.");
       return;
     }
-    p.facing = facingTo(p.x, p.z, CHRONOMANCER.x, CHRONOMANCER.z);
-    const timLv = effectiveJobLevel(p.job, p.level, p.subjob, "time_mage");
-    if (timLv <= 0) {
-      send(p.ws, {
-        type: "npc/dialog",
-        npcId: CHRONOMANCER.id,
-        title: "Chronomancer",
-        body: "I only train Time Mages in chronomancy. Speak with the Job Master if you wish to change jobs.",
-        spells: [],
-      });
-      return;
-    }
-    const forSale = timSpellsForSale(timLv, p.learned);
+    p.facing = facingTo(p.x, p.z, TRAINER.x, TRAINER.z);
+    const subLv =
+      p.subjob && p.level >= SUBJOB_UNLOCK_LEVEL ? subjobLevel(p.level) : 0;
+    const offers = trainerOffersForJobs(p.job, p.level, p.subjob, subLv, p.learned);
+    const jobNote = p.subjob
+      ? `${JOBS[p.job].name} L${p.level} + ${JOBS[p.subjob].name} L${subLv}`
+      : `${JOBS[p.job].name} L${p.level}`;
     send(p.ws, {
       type: "npc/dialog",
-      npcId: CHRONOMANCER.id,
-      title: "Chronomancer",
-      body:
-        p.job === "time_mage"
-          ? `Scrolls for a Time Mage of level ${timLv}.`
-          : `Support Time Mage scrolls (effective L${timLv}).`,
-      spells: forSale.map((id) => ({
-        id,
-        label: TIM_ABILITIES[id].label,
-        cost: timSpellDustCost(id),
-        unlockLevel: TIM_ABILITIES[id].unlockLevel,
-      })),
+      npcId: TRAINER.id,
+      title: "Trainer",
+      body: `Buy job abilities with Dust (${jobNote}). Costs scale 500–10000 by unlock level. Starter kit (Rest + L1 signature) is free.`,
+      spells: offers,
     });
     return;
   }
@@ -2205,39 +2216,44 @@ function handleNpcInteract(p: Player, npcId: string) {
 }
 
 function handleSpellBuy(p: Player, id: AbilityId) {
-  const d = dist(p.x, p.z, CHRONOMANCER.x, CHRONOMANCER.z);
+  const d = dist(p.x, p.z, TRAINER.x, TRAINER.z);
   if (d > NPC_INTERACT_RANGE) {
-    pushLog(p, "You must speak with the Chronomancer to buy spells.");
+    pushLog(p, "You must speak with the Trainer to buy abilities.");
     return;
   }
-  const timLv = effectiveJobLevel(p.job, p.level, p.subjob, "time_mage");
-  if (timLv <= 0) {
-    pushLog(p, "Only Time Mages can learn these scrolls.");
+  if (isTrainerFreeAbility(id)) {
+    pushLog(p, "That ability is part of your free starter kit.");
     return;
   }
-  if (!isTimAbilityId(id) || !isTimSpell(id)) {
-    pushLog(p, "That is not a trainable spell.");
+  const subLv =
+    p.subjob && p.level >= SUBJOB_UNLOCK_LEVEL ? subjobLevel(p.level) : 0;
+  const onMain = abilityIdsForJob(p.job).includes(id);
+  const onSub = !!(p.subjob && subLv > 0 && abilityIdsForJob(p.subjob).includes(id));
+  if (!onMain && !onSub) {
+    pushLog(p, "That ability is not available for your current jobs.");
     return;
   }
-  const def = TIM_ABILITIES[id];
-  if (timLv < def.unlockLevel) {
-    pushLog(p, `${def.label} requires Time Mage level ${def.unlockLevel}.`);
+  const unlockLevel = abilityUnlockLevel(id);
+  const okLevel =
+    (onMain && p.level >= unlockLevel) || (onSub && subLv >= unlockLevel);
+  if (!okLevel) {
+    pushLog(p, `${abilityLabel(id)} requires level ${unlockLevel}.`);
     return;
   }
   if (p.learned.includes(id)) {
-    pushLog(p, `You already know ${def.label}.`);
+    pushLog(p, `You already know ${abilityLabel(id)}.`);
     return;
   }
-  const cost = timSpellDustCost(id);
+  const cost = trainerAbilityDustCost(unlockLevel);
   if (p.dust < cost) {
-    pushLog(p, `Need ${cost} Dust for ${def.label} (you have ${p.dust}).`);
+    pushLog(p, `Need ${cost} Dust for ${abilityLabel(id)} (you have ${p.dust}).`);
     return;
   }
   p.dust -= cost;
   p.learned.push(id);
-  pushLog(p, `Learned ${def.label} (âˆ’${cost} Dust).`);
+  pushLog(p, `Learned ${abilityLabel(id)} (-${cost} Dust).`);
   send(p.ws, snapshotFor(p));
-  handleNpcInteract(p, CHRONOMANCER.id);
+  handleNpcInteract(p, TRAINER.id);
 }
 
 /** Dev/test helper — instant L75 + all TIM spells learned. */
@@ -2311,12 +2327,16 @@ function handleDebugMaxLevel(p: Player) {
 
   const learnedSet = new Set(p.learned);
   let added = 0;
-  for (const id of TIM_ABILITY_IDS) {
-    if (!isTimSpell(id)) continue;
-    if (learnedSet.has(id)) continue;
-    p.learned.push(id);
-    learnedSet.add(id);
-    added += 1;
+  const jobsToGrant: JobId[] = [p.job];
+  if (p.subjob && p.subjob !== p.job) jobsToGrant.push(p.subjob);
+  for (const job of jobsToGrant) {
+    for (const id of abilityIdsForJob(job)) {
+      if (isTrainerFreeAbility(id)) continue;
+      if (learnedSet.has(id)) continue;
+      p.learned.push(id);
+      learnedSet.add(id);
+      added += 1;
+    }
   }
   p.dust = Math.max(p.dust, 5000);
   // Leave skillPrestige alone — post-max echoes come from EXP.
@@ -2324,8 +2344,8 @@ function handleDebugMaxLevel(p: Player) {
   pushLog(
     p,
     from >= MAX_LEVEL
-      ? `Debug: already L${MAX_LEVEL}. Learned ${added} new spell scroll(s). Dust ${p.dust}.`
-      : `Debug: L${from} → L${MAX_LEVEL}. Learned ${added} spell scroll(s). Dust ${p.dust}.`,
+      ? `Debug: already L${MAX_LEVEL}. Learned ${added} Trainer abilit(ies). Dust ${p.dust}.`
+      : `Debug: L${from} → L${MAX_LEVEL}. Learned ${added} Trainer abilit(ies). Dust ${p.dust}.`,
   );
   pushLog(
     p,
@@ -3461,8 +3481,8 @@ function onMessage(ws: WebSocket, data: string) {
         );
       } else if (msg.targetId === JOB_MASTER.id) {
         handleNpcInteract(p, JOB_MASTER.id);
-      } else if (msg.targetId === CHRONOMANCER.id) {
-        handleNpcInteract(p, CHRONOMANCER.id);
+      } else if (msg.targetId === TRAINER.id) {
+        handleNpcInteract(p, TRAINER.id);
       }
       break;
     }

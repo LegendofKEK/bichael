@@ -1,3 +1,4 @@
+import { isTrainerFreeAbility } from "./trainer";
 /**
 
  * Fighter kit — raw melee DPS (jobs-from-plan §4.5).
@@ -412,10 +413,16 @@ export function isFighterAbilityId(id: string): id is FighterAbilityId {
 
 
 
-export function fighterAbilitiesUnlocked(level: number): FighterAbilityId[] {
-
-  return FIGHTER_ABILITY_IDS.filter((id) => FIGHTER_ABILITIES[id].unlockLevel <= level);
-
+export function fighterAbilitiesUnlocked(
+  level: number,
+  learned: readonly string[] = [],
+): FighterAbilityId[] {
+  const learnedSet = new Set(learned);
+  return FIGHTER_ABILITY_IDS.filter((id) => {
+    if (FIGHTER_ABILITIES[id].unlockLevel > level) return false;
+    if (isTrainerFreeAbility(id)) return true;
+    return learnedSet.has(id);
+  });
 }
 
 

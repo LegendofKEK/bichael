@@ -507,9 +507,9 @@ function hubNpcs(cityId: CityId, prefix: string): CityNpcDef[] {
     },
     {
       id: `${prefix}-trainer`,
-      name: "Spell Trainer",
+      name: "Trainer",
       role: "spell_trainer",
-      blurb: "Sells job spells for Dust.",
+      blurb: "Sells job abilities for Dust (500–10000).",
     },
     {
       id: `${prefix}-crafter`,
@@ -597,9 +597,9 @@ export const CITIES: Record<CityId, CityDef> = {
       },
       {
         id: "ck-chronomancer",
-        name: "Chronomancer",
+        name: "Trainer",
         role: "spell_trainer",
-        blurb: "Time Mage specialty trainer (legacy palace hall NPC).",
+        blurb: "Job ability Trainer (legacy palace hall NPC id).",
       },
     ],
   },
