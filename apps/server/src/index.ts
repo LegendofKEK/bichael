@@ -1973,6 +1973,7 @@ function handleAbility(p: Player, id: AbilityId, targetId?: string) {
       meleeRange: MELEE_RANGE,
       playerWeaponBonus: (pl) => playerWeaponBonus(pl as Player),
       playerCombatStats: (pl) => playerCombatStats(pl as Player),
+      playerTreeAtk: (pl) => playerTreeBonuses(pl as Player).atk,
     });
     return;
   }

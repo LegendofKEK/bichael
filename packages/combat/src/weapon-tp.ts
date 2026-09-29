@@ -1,11 +1,20 @@
 /**
  * Weapon Skill (TP) abilities — unlocked by character level, gated by equipped weapon type.
- * Cost 1000 TP; bonus damage = remaining TP after spend + 1000.
+ * Cost 1000 TP. Damage core is physicalDamage * ftp (x hits); TP scales a multiplier on that
+ * bonus portion only (not flat leftover+1000). Per-weapon combat skill levels are deferred (#106);
+ * WS attack path uses skill-tree atk + equipped weapon atk like autos.
  */
 
 import { WEAPON_TOKEN_TYPES } from "./weapon-tokens.generated";
 
 export const WEAPON_TP_COST = 1000;
+/** Soft cap used for TP->bonus mul (matches max TP pool). */
+export const WEAPON_TP_BONUS_CAP = 3000;
+/** Bonus mul at exactly WEAPON_TP_COST (min cast). */
+export const WEAPON_TP_BONUS_MUL_MIN = 0.25;
+/** Bonus mul at WEAPON_TP_BONUS_CAP. */
+export const WEAPON_TP_BONUS_MUL_MAX = 1.0;
+
 export const WEAPON_TP_UNLOCK_LEVELS = [1, 5, 10, 20, 30, 40, 60, 75] as const;
 export type WeaponTpUnlockLevel = (typeof WEAPON_TP_UNLOCK_LEVELS)[number];
 
@@ -33,7 +42,7 @@ export type WeaponTpDef = {
   label: string;
   glyph: string;
   hits: number;
-  /** Multiplier on each hit’s physical base before TP bonus. */
+  /** Multiplier on each hit's physical base before TP bonus mul. */
   ftp: number;
   effects?: WeaponTpEffect[];
   blurb: string;
@@ -66,7 +75,7 @@ export const WEAPON_TP_ABILITIES = {
     "切",
     1,
     1.0,
-    "Single slash. Bonus dmg = leftover TP + 1000.",
+    "Single slash. TP boosts bonus dmg (not flat leftover).",
   ),
   ws_sword_flat_blade: def(
     "ws_sword_flat_blade",
@@ -566,11 +575,27 @@ export function weaponTpAbilityTooltip(id: WeaponTpAbilityId): {
   return {
     title: d.label,
     body: d.blurb,
-    meta: `Weapon Skill · ${d.weapon} · Lv${d.unlockLevel} · ${d.hits} hit${d.hits > 1 ? "s" : ""} · ${fx} · Cost ${WEAPON_TP_COST} TP · Bonus leftover TP+${WEAPON_TP_COST}`,
+    meta: (() => {
+      const mulMinPct = Math.round(WEAPON_TP_BONUS_MUL_MIN * 100);
+      const mulMaxPct = Math.round(WEAPON_TP_BONUS_MUL_MAX * 100);
+      return `Weapon Skill · ${d.weapon} · Lv${d.unlockLevel} · ${d.hits} hit${d.hits > 1 ? "s" : ""} · ${fx} · Cost ${WEAPON_TP_COST} TP · TP bonus +${mulMinPct}%–+${mulMaxPct}% of hit (${WEAPON_TP_COST}–${WEAPON_TP_BONUS_CAP} TP)`;
+    })(),
   };
 }
 
-/** TP bonus after paying the skill cost. */
-export function weaponTpBonusDamage(tpAfterSpend: number): number {
-  return Math.max(0, Math.floor(tpAfterSpend)) + WEAPON_TP_COST;
+/**
+ * TP -> bonus multiplier on each hit's (physicalDamage * ftp) portion.
+ * Uses TP **before** paying the skill cost. Cost remains WEAPON_TP_COST.
+ * Linear: WEAPON_TP_BONUS_MUL_MIN @ 1000 TP -> WEAPON_TP_BONUS_MUL_MAX @ 3000 TP.
+ *
+ * Replaces flat leftover+1000 so TP boosts bonuses without dominating base damage.
+ */
+export function weaponTpBonusMul(tpBeforeSpend: number): number {
+  const tp = Math.max(
+    WEAPON_TP_COST,
+    Math.min(WEAPON_TP_BONUS_CAP, Math.floor(tpBeforeSpend)),
+  );
+  const t = (tp - WEAPON_TP_COST) / (WEAPON_TP_BONUS_CAP - WEAPON_TP_COST);
+  return WEAPON_TP_BONUS_MUL_MIN + t * (WEAPON_TP_BONUS_MUL_MAX - WEAPON_TP_BONUS_MUL_MIN);
 }
+
