@@ -495,6 +495,12 @@ export const FIELD_MOB_SPRITE_URLS = Object.values(MOB_SPRITES).flatMap((s) => {
   return urls;
 });
 
+/** True when this archetype has an authored melee PNG (else client uses lunge/flash). */
+export function mobHasMeleeSprite(archetype: string | undefined): boolean {
+  if (!archetype) return false;
+  return Boolean(MOB_SPRITES[archetype]?.melee);
+}
+
 export function mobSpriteUrl(
   archetype: string | undefined,
   anim: AnimKey,
@@ -502,6 +508,7 @@ export function mobSpriteUrl(
 ): string {
   const set = archetype ? MOB_SPRITES[archetype] : undefined;
   if (!set) return guardSpriteUrl(anim);
+  // Dedicated attack pose when authored; cast has no mob PNGs yet (VFX + tint carry the tell).
   if (anim === "melee" && set.melee) return set.melee;
   if (anim === "walk") {
     if (set.walk2) {
