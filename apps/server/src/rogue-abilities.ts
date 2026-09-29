@@ -100,7 +100,8 @@ export function resolveRogueAbility(
     hooks.pushLog(p, `${def.label} not ready.`);
     return true;
   }
-  if (def.weaponRequired && !daggerEquipped(p)) {
+  // Signature weapon only when this job is main (support dual-job skips it).
+  if (def.weaponRequired && p.job === "rogue" && !daggerEquipped(p)) {
     hooks.pushLog(p, "Equip your dagger first.");
     return true;
   }

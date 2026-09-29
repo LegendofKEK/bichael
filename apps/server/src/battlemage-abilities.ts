@@ -178,7 +178,8 @@ export function resolveBattleMageAbility(
     hooks.pushLog(p, "Not enough MP.");
     return true;
   }
-  if (def.weaponRequired && !swordEquipped(p)) {
+  // Signature weapon only when this job is main (support dual-job skips it).
+  if (def.weaponRequired && p.job === "battle_mage" && !swordEquipped(p)) {
     hooks.pushLog(p, "Equip your sword first.");
     return true;
   }

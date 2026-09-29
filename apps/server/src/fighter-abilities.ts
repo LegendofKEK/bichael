@@ -324,7 +324,9 @@ export function resolveFighterAbility(
 
   }
 
-  if (def.weaponRequired && !greatswordEquipped(p)) {
+  // Signature weapon only when this job is main (support dual-job skips it).
+
+  if (def.weaponRequired && p.job === "fighter" && !greatswordEquipped(p)) {
 
     hooks.pushLog(p, "Equip your greatsword first.");
 

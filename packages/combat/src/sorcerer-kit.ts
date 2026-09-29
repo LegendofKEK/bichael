@@ -559,7 +559,7 @@ export function sorcererAbilityTooltip(id: SorcererAbilityId): {
   if (def.element) bits.push(def.element);
   if (def.needsTarget) bits.push("Target");
   if (def.aoe) bits.push(`AoE ${def.aoe}m`);
-  if (def.staffRequired) bits.push("Staff");
+  if (def.staffRequired) bits.push("Staff (main)");
   return { title: def.label, body: blurb, meta: bits.join(" · ") };
 }
 

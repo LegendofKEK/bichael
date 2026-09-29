@@ -767,7 +767,7 @@ export function timAbilityTooltip(id: TimAbilityId): AbilityTooltip {
   if (def.heal) bits.push(`Heal ${def.heal}+`);
   if (def.aoe) bits.push(`AoE ${def.aoe}`);
   if (def.needsTarget) bits.push("Target");
-  if (def.staffRequired) bits.push("Staff");
+  if (def.staffRequired) bits.push("Staff (main)");
   return {
     title: def.label,
     body: TIM_ABILITY_BLURBS[id],

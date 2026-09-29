@@ -791,7 +791,7 @@ export function clericAbilityTooltip(id: ClericAbilityId): {
   if (def.needsTarget) bits.push("Enemy target");
   if (def.allyTarget) bits.push("Ally target");
   if (def.toggle) bits.push("Toggle");
-  if (def.staffRequired) bits.push("Staff");
+  if (def.staffRequired) bits.push("Staff (main)");
   return { title: def.label, body: blurb, meta: bits.join(" · ") };
 }
 

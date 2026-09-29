@@ -219,7 +219,7 @@ export function rogueAbilityTooltip(id: RogueAbilityId): {
   }
   if (def.durationMs) bits.push(`Dur ${def.durationMs / 1000}s`);
   if (def.needsTarget) bits.push("Target");
-  if (def.weaponRequired) bits.push("Dagger");
+  if (def.weaponRequired) bits.push("Dagger (main)");
   return { title: def.label, body: ROGUE_ABILITY_BLURBS[id], meta: bits.join(" · ") };
 }
 
