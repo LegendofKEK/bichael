@@ -2823,6 +2823,17 @@ button.equip-stat-label:focus-visible {
   gap: 5px;
   margin-bottom: 10px;
 }
+.craft-skill-xp {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: -4px 0 10px;
+  font-size: 12px;
+  opacity: 0.85;
+}
+.craft-skill-xp .craft-progress {
+  height: 6px;
+}
 .craft-chip-lv {
   opacity: 0.75;
   font-weight: 600;

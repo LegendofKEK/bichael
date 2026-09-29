@@ -93,6 +93,8 @@ import {
 import {
   CATALOG_BY_SLUG,
   aggregateEquipmentStats,
+  cloneCraftSkills,
+  craftXpForRecipe,
   craftXpToNext,
   emptyCraftSkills,
   emptyEquipment,
@@ -101,6 +103,7 @@ import {
   ownedMatQty,
   pickAffordableMaterials,
   recipeMaterials,
+  recipeMaterialsComplete,
   type CraftSkill,
   type ItemDef,
 } from "@bellgrave/items";
@@ -218,7 +221,7 @@ type Player = {
   skillUnlocked: string[];
   /** Unspent skill-tree points (bank; grant on level-up / echoes, spend on unlock). */
   skillPoints: number;
-  /** Prestige points after max level (0–100). */
+  /** Prestige points after max level (0â€“100). */
   skillPrestige: number;
   freeStatPoints: number;
   freeStats: Record<AttrKey, number>;
@@ -560,7 +563,7 @@ function spawnSegmentAPack(): Mob[] {
   );
 }
 
-﻿/** Summon up to 4 non-shiny clones around the HQ (once per HQ life). */
+/** Summon up to 4 non-shiny clones around the HQ (once per HQ life). */
 function ensureShinyArmy(hq: Mob, wallet: string | null, now: number) {
   if (!hq.shiny || hq.shinyClone || hq.shinySummoned || !hq.alive) return;
   hq.shinySummoned = true;
@@ -902,8 +905,8 @@ function takeMat(p: Player, slug: string, amount: number): boolean {
 
 function grantCraftXp(p: Player, skill: CraftSkill, amount: number) {
   ensureCraftSkills(p);
-  const row = p.craftSkills[skill] ?? { level: 1, xp: 0 };
-  row.xp += Math.max(1, amount);
+  const prev = p.craftSkills[skill] ?? { level: 1, xp: 0 };
+  const row = { level: prev.level, xp: prev.xp + Math.max(1, amount) };
   let guard = 0;
   while (row.xp >= craftXpToNext(row.level) && guard++ < 50) {
     row.xp -= craftXpToNext(row.level);
@@ -926,7 +929,7 @@ function syncBaseMatsToInventory(p: Player) {
 function dist(ax: number, az: number, bx: number, bz: number): number {
   return Math.hypot(ax - bx, az - bz);
 }
-﻿function noteMobHit(mob: Mob, wallet: string) {
+function noteMobHit(mob: Mob, wallet: string) {
   if (!mob.hitBy) mob.hitBy = new Set();
   mob.hitBy.add(wallet.toLowerCase());
 }
@@ -1441,7 +1444,7 @@ function snapshotFor(p: Player): SnapshotMessage {
       inventory: p.inventory,
       equip: p.equip,
       baseMats: { ...p.baseMats },
-      craftSkills: { ...p.craftSkills },
+      craftSkills: cloneCraftSkills(p.craftSkills),
       zoneId: p.zoneId,
       recasts: { ...p.recasts },
       unlocked,
@@ -1891,7 +1894,7 @@ function stopRest(p: Player, reason?: string) {
   else pushLog(p, "You stop resting.");
 }
 
-function respawnAtHub(p: Player, reason = "You fall… and wake in the Shard Dwellings.") {
+function respawnAtHub(p: Player, reason = "You fallâ€¦ and wake in the Shard Dwellings.") {
   stopRest(p);
   clearJobBuffs(p);
   p.hp = Math.max(1, Math.floor(p.maxHp * 0.3));
@@ -2192,7 +2195,7 @@ function handleNpcInteract(p: Player, npcId: string) {
       type: "npc/dialog",
       npcId: hub.id,
       title: hub.name,
-      body: bodies[hub.role] ?? "…",
+      body: bodies[hub.role] ?? "â€¦",
       craftOpen: hub.role === "crafter",
     });
     return;
@@ -2232,7 +2235,7 @@ function handleSpellBuy(p: Player, id: AbilityId) {
   }
   p.dust -= cost;
   p.learned.push(id);
-  pushLog(p, `Learned ${def.label} (−${cost} Dust).`);
+  pushLog(p, `Learned ${def.label} (âˆ’${cost} Dust).`);
   send(p.ws, snapshotFor(p));
   handleNpcInteract(p, CHRONOMANCER.id);
 }
@@ -2287,7 +2290,7 @@ function handleFreeStat(p: Player, attr: AttrKey, delta: 1 | -1 = 1) {
     p,
     delta === 1
       ? `+1 ${attr.toUpperCase()} (free points left: ${p.freeStatPoints}).`
-      : `−1 ${attr.toUpperCase()} (free points left: ${p.freeStatPoints}).`,
+      : `âˆ’1 ${attr.toUpperCase()} (free points left: ${p.freeStatPoints}).`,
   );
 }
 
@@ -3114,7 +3117,7 @@ function tickSim() {
         if (p.hp !== beforeHp || p.mp !== beforeMp) {
           pushLog(
             p,
-            `Resting… HP ${p.hp}/${p.maxHp} · MP ${p.mp}/${p.maxMp} · TP ${p.tp}`,
+            `Restingâ€¦ HP ${p.hp}/${p.maxHp} Â· MP ${p.mp}/${p.maxMp} Â· TP ${p.tp}`,
           );
         }
         if (p.hp >= p.maxHp && p.mp >= p.maxMp && p.tp <= 0) {
@@ -3296,6 +3299,10 @@ function handleCraft(p: Player, itemId: number) {
     pushLog(p, `${def.name} needs ${skill} level ${def.craftLevel} (you have ${skillLv}).`);
     return;
   }
+  if (!recipeMaterialsComplete(def)) {
+    pushLog(p, "Recipe materials unknown or incomplete — cannot craft.");
+    return;
+  }
   const mats = pickAffordableMaterials(def, p.inventory, p.baseMats);
   if (!mats || mats.length === 0) {
     const preview = recipeMaterials(def);
@@ -3320,7 +3327,7 @@ function handleCraft(p: Player, itemId: number) {
     addItem(p.inventory, def.id, 1);
   }
   const prevLv = p.craftSkills[skill]?.level ?? 1;
-  grantCraftXp(p, skill, Math.max(1, def.craftLevel));
+  grantCraftXp(p, skill, craftXpForRecipe(def.craftLevel, skillLv));
   const nextLv = p.craftSkills[skill]?.level ?? prevLv;
   const levelNote = nextLv > prevLv ? ` ${skill} rose to ${nextLv}!` : "";
   pushLog(p, `Crafted ${def.name}.${levelNote}`);
@@ -3543,3 +3550,4 @@ wss.on("connection", (ws) => {
 
 setInterval(tickSim, TICK_MS);
 console.log(`[bellgrave] game server on ws://localhost:${PORT}`);
+
