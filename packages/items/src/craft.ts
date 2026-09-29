@@ -1,4 +1,4 @@
-import { CATALOG, CATALOG_BY_ID, CATALOG_BY_SLUG } from "./catalog.generated";
+﻿import { CATALOG, CATALOG_BY_ID, CATALOG_BY_SLUG } from "./catalog.generated";
 import type { CraftSkill, ItemDef } from "./types";
 
 export const CRAFT_SKILLS: CraftSkill[] = [
@@ -60,23 +60,68 @@ function parseOneMat(raw: string): RecipeMat | null {
   return { slug, qty, name: def?.name ?? name };
 }
 
-/** Parse catalog `materialsText` like `Copper Ore×2, Tin Ore×1, Pale Dust×1`.
- *  Supports OR alternatives per slot: `Shade Cotton×2 or Linen Scrap×3, Pale Dust×1`.
+/** Raw display name from a materialsText token (even if unresolved). */
+function rawMatName(raw: string): string {
+  const t = raw.trim();
+  const m = /^(.+?)\s*[×x]\s*(\d+)\s*$/iu.exec(t);
+  return (m ? m[1]! : t).trim();
+}
+
+export type ParsedMaterialGroups = {
+  groups: RecipeMatGroup[];
+  /** Names that appear in materialsText but are not in the catalog. */
+  unresolved: string[];
+  /**
+   * False when any comma-separated AND-slot failed to resolve at least one option.
+   * Silent drops of such slots used to let Pale Dust alone satisfy multi-mat recipes.
+   */
+  complete: boolean;
+};
+
+/**
+ * Parse catalog `materialsText` like `Copper Ore×2, Tin Ore×1, Pale Dust×1`.
+ * Supports OR alternatives per slot: `Shade Cotton×2 or Linen Scrap×3, Pale Dust×1`.
+ *
+ * Fail-closed: a comma-slot with zero resolvable options marks `complete: false`
+ * (the slot is NOT silently omitted — callers must refuse to craft).
  */
-export function parseMaterialGroups(text: string): RecipeMatGroup[] {
-  if (!text?.trim()) return [];
+export function parseMaterialGroupsDetailed(text: string): ParsedMaterialGroups {
+  if (!text?.trim()) return { groups: [], unresolved: [], complete: false };
   const groups: RecipeMatGroup[] = [];
+  const unresolved: string[] = [];
+  let complete = true;
   for (const part of text.split(/,/)) {
     const raw = part.trim();
     if (!raw) continue;
     const options: RecipeMat[] = [];
+    let sawAlt = false;
     for (const alt of raw.split(/\bor\b/i)) {
-      const mat = parseOneMat(alt);
+      const token = alt.trim();
+      if (!token) continue;
+      sawAlt = true;
+      const mat = parseOneMat(token);
       if (mat) options.push(mat);
+      else unresolved.push(rawMatName(token));
     }
-    if (options.length) groups.push({ options });
+    if (!sawAlt) continue;
+    if (options.length === 0) {
+      // AND-slot fully unresolved — do not drop it (that undercosts the recipe).
+      complete = false;
+      continue;
+    }
+    groups.push({ options });
   }
-  return groups;
+  if (groups.length === 0) complete = false;
+  return { groups, unresolved, complete };
+}
+
+/** Parse catalog `materialsText` like `Copper Ore×2, Tin Ore×1, Pale Dust×1`.
+ *  Supports OR alternatives per slot: `Shade Cotton×2 or Linen Scrap×3, Pale Dust×1`.
+ *  Incomplete / unresolved slots are omitted from the returned groups — use
+ *  `parseMaterialGroupsDetailed` / `recipeMaterialsComplete` before crafting.
+ */
+export function parseMaterialGroups(text: string): RecipeMatGroup[] {
+  return parseMaterialGroupsDetailed(text).groups;
 }
 
 /** Parse catalog `materialsText` like `Copper Ore×2, Tin Ore×1, Pale Dust×1`. */
@@ -102,18 +147,59 @@ export function recipeMaterialGroups(def: ItemDef): RecipeMatGroup[] {
   return [];
 }
 
+/** True when every AND-slot in the recipe resolved to ≥1 catalog material. */
+export function recipeMaterialsComplete(def: ItemDef): boolean {
+  const structured = def.recipe?.materials;
+  if (structured?.length) {
+    return structured.every((m) => !!CATALOG_BY_SLUG[m.slug] && m.qty > 0);
+  }
+  const text = def.recipe?.materialsText;
+  if (!text?.trim()) return false;
+  return parseMaterialGroupsDetailed(text).complete;
+}
+
 export function recipeMaterials(def: ItemDef): RecipeMat[] {
   return recipeMaterialGroups(def).map((g) => g.options[0]!);
 }
 
-/** Pick one affordable option per group, or null if any group is unaffordable. */
+/**
+ * Prefer an affordable OR option for display; else the option with the most progress.
+ * Prevents "Thread 0/3" while Scrap actually satisfies the slot.
+ */
+export function displayMatsForRecipe(
+  def: ItemDef,
+  inventory: { tokenId: number; amount: number }[],
+  baseMats: Record<string, number>,
+): RecipeMat[] {
+  return recipeMaterialGroups(def).map((group) => {
+    for (const opt of group.options) {
+      if (ownedMatQty(opt.slug, inventory, baseMats) >= opt.qty) return opt;
+    }
+    let best = group.options[0]!;
+    let bestFrac = -1;
+    for (const opt of group.options) {
+      const have = ownedMatQty(opt.slug, inventory, baseMats);
+      const frac = have / Math.max(1, opt.qty);
+      if (frac > bestFrac) {
+        bestFrac = frac;
+        best = opt;
+      }
+    }
+    return best;
+  });
+}
+
+/** Pick one affordable option per group, or null if any group is unaffordable / recipe incomplete. */
 export function pickAffordableMaterials(
   def: ItemDef,
   inventory: { tokenId: number; amount: number }[],
   baseMats: Record<string, number>,
 ): RecipeMat[] | null {
+  if (!recipeMaterialsComplete(def)) return null;
+  const groups = recipeMaterialGroups(def);
+  if (groups.length === 0) return null;
   const picked: RecipeMat[] = [];
-  for (const group of recipeMaterialGroups(def)) {
+  for (const group of groups) {
     let chosen: RecipeMat | null = null;
     for (const opt of group.options) {
       if (ownedMatQty(opt.slug, inventory, baseMats) >= opt.qty) {
@@ -135,9 +221,42 @@ export function emptyCraftSkills(): Record<CraftSkill, CraftSkillState> {
   return out;
 }
 
+/** Deep copy craft skill ranks (snapshot / persistence safe). */
+export function cloneCraftSkills(
+  skills: Partial<Record<string, CraftSkillState>> | null | undefined,
+): Record<CraftSkill, CraftSkillState> {
+  const out = emptyCraftSkills();
+  if (!skills) return out;
+  for (const s of CRAFT_SKILLS) {
+    const row = skills[s];
+    if (row && typeof row === "object") {
+      out[s] = {
+        level: Math.max(1, Math.floor(Number(row.level) || 1)),
+        xp: Math.max(0, Math.floor(Number(row.xp) || 0)),
+      };
+    }
+  }
+  return out;
+}
+
 /** XP to advance from `level` → level+1. */
 export function craftXpToNext(level: number): number {
   return 40 + level * 20;
+}
+
+/**
+ * XP granted for a successful craft.
+ * Early ranks level in a handful of on-tier synths (not 60×1-XP crafts).
+ * Trivial recipes (far below skill) still grant a trickle so spam isn't zero.
+ */
+export function craftXpForRecipe(recipeLevel: number, skillLevel: number): number {
+  const need = Math.max(1, recipeLevel);
+  const have = Math.max(1, skillLevel);
+  const delta = have - need;
+  if (delta >= 10) return 2;
+  if (delta >= 5) return Math.max(4, Math.floor(need * 2));
+  // On-tier or slightly above/below: ~3–5 crafts per early level-up.
+  return Math.max(12, need * 12 + Math.max(0, need - have) * 6);
 }
 
 export function ownedMatQty(
@@ -154,6 +273,8 @@ export function ownedMatQty(
 export type CloseCraftCandidate = {
   def: ItemDef;
   materials: RecipeMat[];
+  /** Full OR groups for UI ("Thread or Scrap"). */
+  materialGroups: RecipeMatGroup[];
   /** 0–1 fraction of materials satisfied. */
   matFrac: number;
   skillLevel: number;
@@ -179,9 +300,10 @@ export function closeCraftRecipes(
   for (const def of CATALOG) {
     if (!def.recipe || !def.craftSkill || def.craftLevel == null) continue;
     if (skillFilter !== "all" && def.craftSkill !== skillFilter) continue;
+    if (!recipeMaterialsComplete(def)) continue;
     const groups = recipeMaterialGroups(def);
     if (groups.length === 0) continue;
-    const materials = groups.map((g) => g.options[0]!);
+    const materials = displayMatsForRecipe(def, inventory, baseMats);
 
     const skillLevel = craftSkills[def.craftSkill]?.level ?? 1;
     const needLevel = def.craftLevel;
@@ -206,7 +328,16 @@ export function closeCraftRecipes(
     const canCraft = levelOk && pickAffordableMaterials(def, inventory, baseMats) != null;
     const score = matFrac * 100 + levelProx * 35 + (canCraft ? 40 : 0) - Math.max(0, needLevel - skillLevel) * 2;
 
-    scored.push({ def, materials, matFrac, skillLevel, needLevel, canCraft, score });
+    scored.push({
+      def,
+      materials,
+      materialGroups: groups,
+      matFrac,
+      skillLevel,
+      needLevel,
+      canCraft,
+      score,
+    });
   }
 
   scored.sort((a, b) => b.score - a.score || a.needLevel - b.needLevel);
@@ -216,6 +347,7 @@ export function closeCraftRecipes(
 export function getCraftableItem(id: number): ItemDef | undefined {
   const def = CATALOG_BY_ID[id];
   if (!def?.recipe || !def.craftSkill || def.craftLevel == null) return undefined;
+  if (!recipeMaterialsComplete(def)) return undefined;
   if (recipeMaterialGroups(def).length === 0) return undefined;
   return def;
 }

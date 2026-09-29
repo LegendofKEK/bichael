@@ -1,4 +1,4 @@
-export type {
+﻿export type {
   JobId,
   EquipSlot,
   Equipment,
@@ -15,15 +15,20 @@ export {
   CRAFT_SKILLS,
   CRAFT_SKILL_LABEL,
   closeCraftRecipes,
+  cloneCraftSkills,
+  craftXpForRecipe,
   craftXpToNext,
+  displayMatsForRecipe,
   emptyCraftSkills,
   getCraftableItem,
   ownedMatQty,
   parseMaterialGroups,
+  parseMaterialGroupsDetailed,
   parseMaterialsText,
   pickAffordableMaterials,
   recipeMaterialGroups,
   recipeMaterials,
+  recipeMaterialsComplete,
   type CloseCraftCandidate,
   type CraftSkillState,
   type RecipeMat,
@@ -33,7 +38,7 @@ export {
 import { CATALOG_BY_ID } from "./catalog.generated";
 import { EQUIP_SLOTS, type Equipment, type EquipSlot, type ItemDef, type ItemStats } from "./types";
 
-/** MVP legacy IDs — stable across catalog regen. */
+/** MVP legacy IDs â€” stable across catalog regen. */
 export const ITEM = {
   STAFF_ASHBEAM: 1,
   ROBE_LINEN: 2,
@@ -83,3 +88,4 @@ export function aggregateEquipmentStats(
   }
   return total;
 }
+

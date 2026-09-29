@@ -1,8 +1,9 @@
-import {
+﻿import {
   CRAFT_SKILLS,
   CRAFT_SKILL_LABEL,
   CATALOG_BY_SLUG,
   closeCraftRecipes,
+  craftXpToNext,
   emptyCraftSkills,
   getItem,
   ownedMatQty,
@@ -54,6 +55,10 @@ export function CraftingPanel({ you, onClose }: Props) {
     return rows;
   }, [you.inventory, you.baseMats]);
 
+  const focusSkill: CraftSkill | null = skill === "all" ? null : skill;
+  const focusRow = focusSkill ? craftSkills[focusSkill] : null;
+  const focusNeed = focusRow ? craftXpToNext(focusRow.level ?? 1) : 0;
+
   return (
     <div className="cmd-panel craft-panel">
       <div className="cmd-panel-head">
@@ -77,12 +82,14 @@ export function CraftingPanel({ you, onClose }: Props) {
         </button>
         {CRAFT_SKILLS.map((s) => {
           const lv = craftSkills[s]?.level ?? 1;
+          const xp = craftSkills[s]?.xp ?? 0;
+          const need = craftXpToNext(lv);
           return (
             <button
               key={s}
               type="button"
               className={`cmd-pill-tab${skill === s ? " on" : ""}`}
-              title={`${CRAFT_SKILL_LABEL[s]} Lv.${lv}`}
+              title={`${CRAFT_SKILL_LABEL[s]} Lv.${lv} — ${xp}/${need} XP`}
               onClick={() => setSkill(s)}
             >
               {CRAFT_SKILL_LABEL[s]}
@@ -91,6 +98,17 @@ export function CraftingPanel({ you, onClose }: Props) {
           );
         })}
       </div>
+
+      {focusRow && focusSkill && (
+        <div className="craft-skill-xp" title={`${focusRow.xp}/${focusNeed} XP`}>
+          <span>
+            {CRAFT_SKILL_LABEL[focusSkill]} XP {focusRow.xp}/{focusNeed}
+          </span>
+          <div className="craft-progress">
+            <i style={{ width: `${Math.min(100, (focusRow.xp / Math.max(1, focusNeed)) * 100)}%` }} />
+          </div>
+        </div>
+      )}
 
       <div className="cmd-section-label">Close to crafting</div>
       <div className="craft-close-list">
@@ -101,6 +119,7 @@ export function CraftingPanel({ you, onClose }: Props) {
         )}
         {closeList.map((c) => {
           const pct = Math.round(c.matFrac * 100);
+          const groups = c.materialGroups ?? c.materials.map((m) => ({ options: [m] }));
           return (
             <div key={c.def.id} className="craft-recipe-row">
               <img src={c.def.icon} alt="" width={40} height={40} className="craft-icon" />
@@ -112,12 +131,25 @@ export function CraftingPanel({ you, onClose }: Props) {
                   </span>
                 </div>
                 <div className="craft-mat-line">
-                  {c.materials.map((m) => {
-                    const have = ownedMatQty(m.slug, you.inventory, you.baseMats ?? {});
-                    const ok = have >= m.qty;
+                  {groups.map((g, gi) => {
+                    const parts = g.options.map((m) => {
+                      const have = ownedMatQty(m.slug, you.inventory, you.baseMats ?? {});
+                      const ok = have >= m.qty;
+                      return (
+                        <span key={m.slug} style={{ color: ok ? "#8dcf8a" : "#d4a070" }}>
+                          {m.name} {have}/{m.qty}
+                        </span>
+                      );
+                    });
                     return (
-                      <span key={m.slug} style={{ color: ok ? "#8dcf8a" : "#d4a070" }}>
-                        {m.name} {have}/{m.qty}
+                      <span key={gi} className="craft-mat-group">
+                        {parts.map((node, i) => (
+                          <span key={i}>
+                            {i > 0 ? <span style={{ opacity: 0.55 }}> or </span> : null}
+                            {node}
+                          </span>
+                        ))}
+                        {gi < groups.length - 1 ? <span style={{ opacity: 0.45 }}> · </span> : null}
                       </span>
                     );
                   })}
