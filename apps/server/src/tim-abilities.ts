@@ -367,7 +367,8 @@ export function resolveTimAbility(
     const tid = targetId ?? p.targetId;
     const range = def.range ?? 14;
     const aoe = def.aoe ?? 0;
-    const primary = findMob(mobs, tid) ?? mobs.find((m) => m.alive);
+    // Never fall back to an arbitrary alive mob elsewhere in the world (#47).
+    const primary = findMob(mobs, tid);
 
     if (id === "temporal_distortion") {
       const radius = aoe || range;

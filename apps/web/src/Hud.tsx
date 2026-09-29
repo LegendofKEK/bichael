@@ -795,6 +795,7 @@ export function Hud() {
           >
             Settings
           </button>
+          {import.meta.env.DEV && (
           <button
             type="button"
             role="menuitem"
@@ -809,6 +810,7 @@ export function Hud() {
           >
             Max Lv
           </button>
+          )}
         </div>
       </div>
 

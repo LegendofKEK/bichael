@@ -297,23 +297,28 @@ export function resolveSorcererAbility(
   // â€”â€” Elemental nukes â€”â€”
   if (def.category === "elemental" && def.potency != null && def.element) {
     const cascadeBonus = now < p.cascadeUntil;
-    if (cascadeBonus) p.cascadeUntil = 0;
+    // Clear Cascade only after the cast validates (target/range/MP) (#54).
 
     if (def.isGa && def.aoe) {
       const tid = targetId ?? p.targetId;
       const anchor = hooks.findMob(tid);
-      const cx = anchor?.x ?? p.x;
-      const cz = anchor?.z ?? p.z;
-      if (anchor && hooks.dist(p.x, p.z, anchor.x, anchor.z) > (def.range ?? 12)) {
+      if (!anchor || !anchor.alive) {
+        hooks.pushLog(p, "No target.");
+        return true;
+      }
+      if (hooks.dist(p.x, p.z, anchor.x, anchor.z) > (def.range ?? 12)) {
         hooks.pushLog(p, "Too far.");
         return true;
       }
+      const cx = anchor.x;
+      const cz = anchor.z;
       if (!spendMp(p, mpCost, now)) {
         hooks.pushLog(p, "Not enough MP.");
         return true;
       }
+      if (cascadeBonus) p.cascadeUntil = 0;
       payRecast();
-      if (anchor) p.facing = hooks.facingTo(p.x, p.z, anchor.x, anchor.z);
+      p.facing = hooks.facingTo(p.x, p.z, anchor.x, anchor.z);
       p.lastScElement = def.element;
       p.scCastFlashUntil = now + 650;
       p.anim = "cast";
@@ -344,6 +349,7 @@ export function resolveSorcererAbility(
       hooks.pushLog(p, "Not enough MP.");
       return true;
     }
+    if (cascadeBonus) p.cascadeUntil = 0;
     payRecast();
     p.facing = hooks.facingTo(p.x, p.z, m.x, m.z);
     p.lastScElement = def.element;
