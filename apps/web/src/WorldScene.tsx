@@ -18,6 +18,7 @@ import {
   pickMeleeVariant,
   spriteSlug,
   walkFrameAt,
+  mobHasMeleeSprite,
   mobSpriteUrl,
   npcSpriteUrl,
   playerSpriteUrl,
@@ -646,8 +647,19 @@ function MobBillboard({ unitId, unit }: { unitId: string; unit: UnitSnapshot }) 
   const hpFill = useRef<THREE.Mesh>(null);
   const barsRoot = useRef<THREE.Group>(null);
   const targetRing = useRef<THREE.Mesh>(null);
+  const castTelegraph = useRef<THREE.Mesh>(null);
+  const castCircleGround = useRef<THREE.Mesh>(null);
+  const castCircleFront = useRef<THREE.Mesh>(null);
+  const castCircleMat = useRef<THREE.MeshBasicMaterial>(null);
+  const castFrontMat = useRef<THREE.MeshBasicMaterial>(null);
   const lastUrl = useRef("");
   const lastMirror = useRef<boolean | null>(null);
+  const lastAnimUntil = useRef(0);
+  const lastCastAnimUntil = useRef(0);
+  const swingLocalStart = useRef(0);
+  const swingLocalDur = useRef(280);
+  const castLocalStart = useRef(0);
+  const castLocalDur = useRef(700);
   const hopDist = useRef(0);
   const smooth = useRef<SmoothPos>({ x: unit.x, y: unit.y ?? 0, z: unit.z, primed: false });
   const unitRef = useRef(unit);
@@ -655,6 +667,14 @@ function MobBillboard({ unitId, unit }: { unitId: string; unit: UnitSnapshot }) 
   const { camera } = useThree();
   const selectedTarget = useGame((s) => s.selectedTarget);
   const isSelected = selectedTarget === unitId;
+
+  const enemyCastTex = useMemo(() => makeEnemyCastCircleTexture(), []);
+  useEffect(
+    () => () => {
+      enemyCastTex.dispose();
+    },
+    [enemyCastTex],
+  );
 
   const seedUrl = useMemo(() => mobSpriteUrl(unit.archetype, "idle"), [unit.archetype]);
   const seedRaw = useTexture(seedUrl);
@@ -742,6 +762,90 @@ function MobBillboard({ unitId, unit }: { unitId: string; unit: UnitSnapshot }) 
     }
 
     const anim = u.anim as AnimKey;
+    const faceAng = u.facing ?? 0;
+    const fwdX = Math.sin(faceAng);
+    const fwdZ = Math.cos(faceAng);
+    const castFwd = 0.7;
+
+    // Cast tell — rising edge starts a local window so clock skew / lag still shows the circle.
+    if (anim === "cast" && u.animUntil > lastCastAnimUntil.current) {
+      lastCastAnimUntil.current = u.animUntil;
+      castLocalStart.current = performance.now();
+      const remain = u.animUntil - Date.now();
+      castLocalDur.current = Math.max(550, Math.min(1100, Number.isFinite(remain) ? remain + 80 : 700));
+      spawnVfx("castBurst", {
+        x: px + fwdX * castFwd,
+        y: py,
+        z: pz + fwdZ * castFwd,
+      });
+    } else if (anim !== "cast") {
+      lastCastAnimUntil.current = 0;
+    }
+    const castLocalOn =
+      castLocalStart.current > 0 &&
+      performance.now() - castLocalStart.current < castLocalDur.current;
+    const casting = anim === "cast" && (u.animUntil > Date.now() || castLocalOn);
+
+    if (castTelegraph.current) {
+      castTelegraph.current.visible = casting;
+      if (casting) {
+        const life = Math.min(
+          1,
+          (performance.now() - castLocalStart.current) / Math.max(1, castLocalDur.current),
+        );
+        const s = 0.95 + life * 1.55;
+        castTelegraph.current.position.set(fwdX * castFwd, 0.05, fwdZ * castFwd);
+        castTelegraph.current.scale.set(s, s, 1);
+        castTelegraph.current.rotation.z = performance.now() / 900;
+        const matC = castTelegraph.current.material as THREE.MeshBasicMaterial;
+        matC.opacity = 0.4 + (1 - life) * 0.45;
+      }
+    }
+    if (castCircleGround.current && castCircleMat.current) {
+      castCircleGround.current.visible = casting;
+      if (casting) {
+        const t = performance.now() / 1000;
+        const life = Math.min(
+          1,
+          (performance.now() - castLocalStart.current) / Math.max(1, castLocalDur.current),
+        );
+        const pulse = 1.15 + Math.sin(t * 8) * 0.08 + life * 0.55;
+        castCircleGround.current.position.set(fwdX * castFwd, 0.06, fwdZ * castFwd);
+        castCircleGround.current.scale.set(pulse, pulse, 1);
+        castCircleGround.current.rotation.z = t * 2.4;
+        castCircleMat.current.opacity = 0.55 + (1 - life) * 0.3 + Math.sin(t * 10) * 0.08;
+      }
+    }
+    if (castCircleFront.current && castFrontMat.current) {
+      castCircleFront.current.visible = casting;
+      if (casting) {
+        const t = performance.now() / 1000;
+        const life = Math.min(
+          1,
+          (performance.now() - castLocalStart.current) / Math.max(1, castLocalDur.current),
+        );
+        const pulse = 1.05 + Math.sin(t * 7) * 0.1 + life * 0.35;
+        // Sit in the camera-yawed billboard so the vertical circle faces the player.
+        castCircleFront.current.position.set(0, spriteH0 * 0.55, 0.35);
+        castCircleFront.current.scale.set(pulse * 1.35, pulse * 1.35, 1);
+        castCircleFront.current.rotation.z = -t * 1.8;
+        castFrontMat.current.opacity = 0.5 + (1 - life) * 0.35 + Math.sin(t * 9) * 0.1;
+      }
+    }
+
+    // Melee rising edge — punch + SFX (sprite swap when assets exist).
+    if (anim === "melee" && u.animUntil > lastAnimUntil.current) {
+      lastAnimUntil.current = u.animUntil;
+      swingLocalStart.current = performance.now();
+      const remain = u.animUntil - Date.now();
+      swingLocalDur.current = Math.max(160, Math.min(420, Number.isFinite(remain) ? Math.max(remain, 160) : 280));
+      const dist = Math.hypot(cp.x - px, cp.z - pz);
+      const vol = Math.max(0.15, Math.min(0.6, 1.1 - dist / 28));
+      playEnemySwing(vol);
+    } else if (anim !== "melee") {
+      lastAnimUntil.current = 0;
+    }
+
     const wf = anim === "walk" ? walkFrameAt(performance.now()) : 0;
     const url = mobSpriteUrl(u.archetype, anim, wf);
     if (url !== lastUrl.current) {
@@ -764,14 +868,26 @@ function MobBillboard({ unitId, unit }: { unitId: string; unit: UnitSnapshot }) 
         const phase = (hopDist.current / 0.55) % 1;
         hopY = phase < 0.55 ? Math.sin((phase / 0.55) * Math.PI) * 0.16 : 0;
       } else if (u.archetype === "pale_slime") {
-        hopY = Math.abs(Math.sin(performance.now() / 1000 * Math.PI * 2.4)) * 0.09;
+        hopY = Math.abs(Math.sin((performance.now() / 1000) * Math.PI * 2.4)) * 0.09;
       }
+    }
+
+    let lunge = 0;
+    let attackFlash = false;
+    if (anim === "melee") {
+      const elapsed = performance.now() - swingLocalStart.current;
+      const tSwing = Math.min(1, elapsed / Math.max(1, swingLocalDur.current));
+      const punch = tSwing < 0.35 ? tSwing / 0.35 : Math.max(0, 1 - (tSwing - 0.35) / 0.65);
+      lunge = 0.06 + punch * 0.22;
+      // No authored melee PNG — brief warm flash so the swing still reads.
+      if (!mobHasMeleeSprite(u.archetype) && tSwing < 0.85) attackFlash = true;
     }
 
     // Hop is position.y only. Mirror is scale.x only — never roll the quad.
     lockUpright(meshRef.current);
-    meshRef.current.position.set(0, spriteH0 * 0.5 + hopY, 0);
-    meshRef.current.scale.set(mirror ? -spriteW0 : spriteW0, spriteH0, 1);
+    meshRef.current.position.set(0, spriteH0 * 0.5 + hopY, lunge);
+    const squash = attackFlash ? 1.06 : 1;
+    meshRef.current.scale.set(mirror ? -spriteW0 * squash : spriteW0 * squash, spriteH0 * squash, 1);
     if (barsRoot.current) barsRoot.current.position.y = spriteH0 + 0.32;
 
     if (u.buffs.petrifyUntil > Date.now()) {
@@ -780,6 +896,13 @@ function MobBillboard({ unitId, unit }: { unitId: string; unit: UnitSnapshot }) 
     } else if (u.buffs.scImpactUntil > Date.now()) {
       const pulse = 0.85 + Math.sin(performance.now() / 55) * 0.15;
       mat.current.color.setRGB(0.95 * pulse, 0.55 * pulse, 0.35 * pulse);
+    } else if (casting) {
+      // Cast wind-up tint — readable even without a cast PNG.
+      const pulse = 0.9 + Math.sin(performance.now() / 90) * 0.1;
+      mat.current.color.setRGB(1.0 * pulse, 0.72 * pulse, 0.45 * pulse);
+    } else if (attackFlash) {
+      const pulse = 0.92 + Math.sin(performance.now() / 40) * 0.08;
+      mat.current.color.setRGB(1.0 * pulse, 0.78 * pulse, 0.55 * pulse);
     } else if (u.shiny) {
       // HQ shiny: warm gold pulse on the same sprite.
       const pulse = 0.88 + Math.sin(performance.now() / 280) * 0.12;
@@ -795,6 +918,9 @@ function MobBillboard({ unitId, unit }: { unitId: string; unit: UnitSnapshot }) 
       mat.current.transparent = true;
       root.current.visible = fade > 0.04;
       if (barsRoot.current) barsRoot.current.visible = false;
+      if (castTelegraph.current) castTelegraph.current.visible = false;
+      if (castCircleGround.current) castCircleGround.current.visible = false;
+      if (castCircleFront.current) castCircleFront.current.visible = false;
     } else {
       mat.current.opacity = 1;
       if (barsRoot.current) barsRoot.current.visible = true;
@@ -835,8 +961,65 @@ function MobBillboard({ unitId, unit }: { unitId: string; unit: UnitSnapshot }) 
           side={THREE.DoubleSide}
         />
       </mesh>
+
+      {/* Cast telegraph — expanding ground marker during enemy cast wind-up */}
+      <mesh
+        ref={castTelegraph}
+        rotation={[-Math.PI / 2, 0, 0]}
+        position={[0, 0.05, 0]}
+        visible={false}
+        renderOrder={2}
+      >
+        <ringGeometry args={[0.28, 1.05, 48]} />
+        <meshBasicMaterial
+          color="#ff8050"
+          transparent
+          opacity={0.45}
+          depthWrite={false}
+          toneMapped={false}
+          side={THREE.DoubleSide}
+        />
+      </mesh>
+
+      {/* Enemy multi-spoke cast circle (ground) */}
+      <mesh
+        ref={castCircleGround}
+        rotation={[-Math.PI / 2, 0, 0]}
+        position={[0, 0.06, 0]}
+        visible={false}
+        renderOrder={3}
+      >
+        <planeGeometry args={[2.2, 2.2]} />
+        <meshBasicMaterial
+          ref={castCircleMat}
+          map={enemyCastTex}
+          color="#ffb080"
+          transparent
+          opacity={0.65}
+          depthWrite={false}
+          toneMapped={false}
+          blending={THREE.AdditiveBlending}
+          side={THREE.DoubleSide}
+        />
+      </mesh>
+
       {unit.shiny && <ShinySparkles height={spriteH0} />}
       <group ref={billboard}>
+        {/* Vertical cast circle — child of camera-yawed billboard so it faces the player */}
+        <mesh ref={castCircleFront} position={[0, spriteH0 * 0.55, 0.35]} visible={false} renderOrder={14}>
+          <planeGeometry args={[1.6, 1.6]} />
+          <meshBasicMaterial
+            ref={castFrontMat}
+            map={enemyCastTex}
+            color="#ffc090"
+            transparent
+            opacity={0.6}
+            depthWrite={false}
+            toneMapped={false}
+            blending={THREE.AdditiveBlending}
+            side={THREE.DoubleSide}
+          />
+        </mesh>
         <mesh ref={meshRef} position={[0, spriteH0 * 0.5, 0]} renderOrder={2}>
           <planeGeometry args={[1, 1]} />
           <meshBasicMaterial
@@ -867,7 +1050,9 @@ function MobBillboard({ unitId, unit }: { unitId: string; unit: UnitSnapshot }) 
                 style={{
                   fontSize: 11,
                   color: unit.shiny ? "#ffe29a" : "#efe8dc",
-                  textShadow: unit.shiny ? "0 1px 3px #000, 0 0 8px #c9a227" : "0 1px 3px #000, 0 0 6px #3a2a18",
+                  textShadow: unit.shiny
+                    ? "0 1px 3px #000, 0 0 8px #c9a227"
+                    : "0 1px 3px #000, 0 0 6px #3a2a18",
                   whiteSpace: "nowrap",
                   fontFamily: "Cinzel, Georgia, serif",
                   textAlign: "center",
@@ -919,6 +1104,7 @@ function MobBillboard({ unitId, unit }: { unitId: string; unit: UnitSnapshot }) 
     </group>
   );
 }
+
 
 function SheetBillboardInner({
   unitId,
