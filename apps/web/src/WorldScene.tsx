@@ -86,11 +86,12 @@ function makeEnemyCastCircleTexture(variant: "outer" | "inner" = "outer"): THREE
   const cy = 256;
   const isInner = variant === "inner";
 
-  // Soft outer glow — ground decal readability without a solid disc
+  // Soft outer glow — blue / white / black flashy magic (no orange/gold)
   const glow = ctx.createRadialGradient(cx, cy, isInner ? 90 : 110, cx, cy, isInner ? 220 : 248);
-  glow.addColorStop(0, "rgba(255, 140, 70, 0)");
-  glow.addColorStop(0.5, isInner ? "rgba(255, 190, 110, 0.22)" : "rgba(255, 130, 70, 0.38)");
-  glow.addColorStop(1, "rgba(255, 80, 40, 0)");
+  glow.addColorStop(0, "rgba(10, 20, 40, 0)");
+  glow.addColorStop(0.45, isInner ? "rgba(120, 190, 255, 0.2)" : "rgba(40, 100, 220, 0.42)");
+  glow.addColorStop(0.72, isInner ? "rgba(200, 230, 255, 0.16)" : "rgba(160, 210, 255, 0.28)");
+  glow.addColorStop(1, "rgba(0, 0, 0, 0)");
   ctx.fillStyle = glow;
   ctx.beginPath();
   ctx.arc(cx, cy, isInner ? 220 : 248, 0, Math.PI * 2);
@@ -98,10 +99,10 @@ function makeEnemyCastCircleTexture(variant: "outer" | "inner" = "outer"): THREE
 
   // Concentric ornate rings
   const rings = isInner
-    ? ([[170, 4, 0.75], [140, 2.5, 0.55], [105, 3.5, 0.8]] as const)
-    : ([[210, 6, 0.9], [185, 3, 0.55], [155, 4.5, 0.75], [120, 2.5, 0.6]] as const);
+    ? ([[170, 4, 0.8], [140, 2.5, 0.55], [105, 3.5, 0.85]] as const)
+    : ([[210, 6, 0.92], [185, 3, 0.55], [155, 4.5, 0.78], [120, 2.5, 0.62]] as const);
   for (const [r, w, a] of rings) {
-    ctx.strokeStyle = `rgba(255, 185, 120, ${a})`;
+    ctx.strokeStyle = `rgba(170, 215, 255, ${a})`;
     ctx.lineWidth = w;
     ctx.beginPath();
     ctx.arc(cx, cy, r, 0, Math.PI * 2);
@@ -114,7 +115,7 @@ function makeEnemyCastCircleTexture(variant: "outer" | "inner" = "outer"): THREE
   for (let i = 0; i < dashCount; i++) {
     const a0 = (i / dashCount) * Math.PI * 2 + (isInner ? 0.08 : 0);
     const a1 = a0 + (Math.PI * 2) / dashCount * 0.55;
-    ctx.strokeStyle = i % 2 === 0 ? "rgba(255, 230, 160, 0.92)" : "rgba(255, 120, 70, 0.7)";
+    ctx.strokeStyle = i % 2 === 0 ? "rgba(245, 250, 255, 0.95)" : "rgba(50, 120, 255, 0.78)";
     ctx.lineWidth = i % 2 === 0 ? 5 : 3;
     ctx.beginPath();
     ctx.arc(cx, cy, dashR, a0, a1);
@@ -127,7 +128,7 @@ function makeEnemyCastCircleTexture(variant: "outer" | "inner" = "outer"): THREE
     const a = (i / spokeN) * Math.PI * 2 + (isInner ? Math.PI / spokeN : 0);
     const inner = isInner ? (i % 2 === 0 ? 70 : 85) : i % 2 === 0 ? 95 : 115;
     const outer = isInner ? (i % 2 === 0 ? 165 : 148) : i % 2 === 0 ? 215 : 195;
-    ctx.strokeStyle = i % 3 === 0 ? "rgba(255, 235, 170, 0.95)" : "rgba(255, 130, 75, 0.78)";
+    ctx.strokeStyle = i % 3 === 0 ? "rgba(255, 255, 255, 0.96)" : "rgba(70, 150, 255, 0.82)";
     ctx.lineWidth = i % 3 === 0 ? 3.6 : 2;
     ctx.beginPath();
     ctx.moveTo(cx + Math.cos(a) * inner, cy + Math.sin(a) * inner);
@@ -146,8 +147,8 @@ function makeEnemyCastCircleTexture(variant: "outer" | "inner" = "outer"): THREE
     ctx.save();
     ctx.translate(x, y);
     ctx.rotate(a + Math.PI / 2);
-    ctx.strokeStyle = kind === 0 ? "rgba(255, 230, 150, 0.95)" : "rgba(255, 160, 100, 0.85)";
-    ctx.fillStyle = "rgba(255, 140, 80, 0.25)";
+    ctx.strokeStyle = kind === 0 ? "rgba(255, 255, 255, 0.96)" : "rgba(130, 190, 255, 0.88)";
+    ctx.fillStyle = "rgba(20, 50, 120, 0.35)";
     ctx.lineWidth = 2.2;
     ctx.beginPath();
     if (kind === 0) {
@@ -183,6 +184,91 @@ function makeEnemyCastCircleTexture(variant: "outer" | "inner" = "outer"): THREE
 
   const tex = new THREE.CanvasTexture(c);
   tex.colorSpace = THREE.SRGBColorSpace;
+  tex.needsUpdate = true;
+  tex.anisotropy = 4;
+  return tex;
+}
+
+const CAST_RIBBON_COUNT = 8;
+
+/** Vertical magical-wave ribbon — extruded upward from the ground cast circle. */
+function makeEnemyCastRibbonTexture(): THREE.CanvasTexture {
+  const w = 128;
+  const h = 256;
+  const c = document.createElement("canvas");
+  c.width = w;
+  c.height = h;
+  const ctx = c.getContext("2d")!;
+  ctx.clearRect(0, 0, w, h);
+
+  // Soft column envelope (black void edges, blue body) — seamless in V for UV scroll
+  for (let y = 0; y < h; y++) {
+    const v = y / h;
+    const g = ctx.createLinearGradient(0, y, w, y);
+    const pulse = 0.55 + 0.45 * Math.sin(v * Math.PI * 4);
+    g.addColorStop(0, "rgba(0, 0, 0, 0)");
+    g.addColorStop(0.18, `rgba(8, 20, 48, ${0.15 * pulse})`);
+    g.addColorStop(0.5, `rgba(50, 130, 255, ${0.38 * pulse})`);
+    g.addColorStop(0.82, `rgba(8, 20, 48, ${0.15 * pulse})`);
+    g.addColorStop(1, "rgba(0, 0, 0, 0)");
+    ctx.fillStyle = g;
+    ctx.fillRect(0, y, w, 1);
+  }
+
+  // Undulating energy filaments (wave ribbon look)
+  const filaments: Array<[number, number, string, number, number]> = [
+    [28, 14, "rgba(30, 90, 220, 0.55)", 0.0, 2],
+    [22, 8, "rgba(90, 170, 255, 0.75)", 1.1, 2],
+    [16, 4.5, "rgba(210, 235, 255, 0.9)", 2.2, 3],
+    [10, 2.2, "rgba(255, 255, 255, 0.95)", 0.7, 3],
+    [18, 3.5, "rgba(40, 80, 160, 0.7)", 3.4, 1],
+  ];
+  for (const [amp, thick, color, phase, turns] of filaments) {
+    ctx.beginPath();
+    for (let y = 0; y <= h; y++) {
+      const v = y / h;
+      const x =
+        w * 0.5 +
+        Math.sin(v * Math.PI * 2 * turns + phase) * amp +
+        Math.sin(v * Math.PI * 2 * (turns + 1) + phase * 1.7) * amp * 0.28;
+      if (y === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    }
+    ctx.strokeStyle = color;
+    ctx.lineWidth = thick;
+    ctx.lineJoin = "round";
+    ctx.lineCap = "round";
+    ctx.stroke();
+  }
+
+  // Horizontal spark streaks (flashy magic bands)
+  for (let i = 0; i < 7; i++) {
+    const y = ((i + 0.5) / 7) * h;
+    const band = ctx.createLinearGradient(0, y, w, y);
+    band.addColorStop(0, "rgba(255, 255, 255, 0)");
+    band.addColorStop(0.35, "rgba(160, 210, 255, 0.15)");
+    band.addColorStop(0.5, "rgba(255, 255, 255, 0.55)");
+    band.addColorStop(0.65, "rgba(80, 150, 255, 0.2)");
+    band.addColorStop(1, "rgba(255, 255, 255, 0)");
+    ctx.fillStyle = band;
+    ctx.fillRect(0, y - 1.5, w, 3);
+  }
+
+  // Soft horizontal edge fade so ribbons blend into the ground circle / air
+  const edgeFade = ctx.createLinearGradient(0, 0, 0, h);
+  edgeFade.addColorStop(0, "rgba(0, 0, 0, 0.85)");
+  edgeFade.addColorStop(0.08, "rgba(0, 0, 0, 0)");
+  edgeFade.addColorStop(0.92, "rgba(0, 0, 0, 0)");
+  edgeFade.addColorStop(1, "rgba(0, 0, 0, 0.9)");
+  ctx.globalCompositeOperation = "destination-out";
+  ctx.fillStyle = edgeFade;
+  ctx.fillRect(0, 0, w, h);
+  ctx.globalCompositeOperation = "source-over";
+
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.wrapS = THREE.ClampToEdgeWrapping;
+  tex.wrapT = THREE.RepeatWrapping;
   tex.needsUpdate = true;
   tex.anisotropy = 4;
   return tex;
@@ -711,6 +797,9 @@ function MobBillboard({ unitId, unit }: { unitId: string; unit: UnitSnapshot }) 
   const castCircleInner = useRef<THREE.Mesh>(null);
   const castCircleMat = useRef<THREE.MeshBasicMaterial>(null);
   const castInnerMat = useRef<THREE.MeshBasicMaterial>(null);
+  const castRibbonGroup = useRef<THREE.Group>(null);
+  const castRibbonMeshes = useRef<(THREE.Mesh | null)[]>([]);
+  const castRibbonMats = useRef<(THREE.MeshBasicMaterial | null)[]>([]);
   const lastUrl = useRef("");
   const lastMirror = useRef<boolean | null>(null);
   const lastAnimUntil = useRef(0);
@@ -729,12 +818,14 @@ function MobBillboard({ unitId, unit }: { unitId: string; unit: UnitSnapshot }) 
 
   const enemyCastTex = useMemo(() => makeEnemyCastCircleTexture("outer"), []);
   const enemyCastInnerTex = useMemo(() => makeEnemyCastCircleTexture("inner"), []);
+  const enemyCastRibbonTex = useMemo(() => makeEnemyCastRibbonTexture(), []);
   useEffect(
     () => () => {
       enemyCastTex.dispose();
       enemyCastInnerTex.dispose();
+      enemyCastRibbonTex.dispose();
     },
-    [enemyCastTex, enemyCastInnerTex],
+    [enemyCastTex, enemyCastInnerTex, enemyCastRibbonTex],
   );
 
   const seedUrl = useMemo(() => mobSpriteUrl(unit.archetype, "idle"), [unit.archetype]);
@@ -899,6 +990,40 @@ function MobBillboard({ unitId, unit }: { unitId: string; unit: UnitSnapshot }) 
       }
     }
 
+    // Rising magical-wave ribbons — extrude upward from the ground circle
+    if (castRibbonGroup.current) {
+      castRibbonGroup.current.visible = casting;
+      if (casting) {
+        const t = performance.now() / 1000;
+        const life = Math.min(
+          1,
+          (performance.now() - castLocalStart.current) / Math.max(1, castLocalDur.current),
+        );
+        // Spin with the outer circle so ribbons feel grown from it
+        castRibbonGroup.current.rotation.y = t * 1.35;
+        const grow = 0.22 + life * 0.78;
+        const radius = 0.95 + life * 0.2 + Math.sin(t * 5) * 0.03;
+        // Shared ribbon map — one UV scroll for the whole curtain
+        if (enemyCastRibbonTex) {
+          enemyCastRibbonTex.offset.y = (t * 0.85) % 1;
+        }
+        for (let i = 0; i < CAST_RIBBON_COUNT; i++) {
+          const mesh = castRibbonMeshes.current[i];
+          const rMat = castRibbonMats.current[i];
+          if (!mesh || !rMat) continue;
+          const a = (i / CAST_RIBBON_COUNT) * Math.PI * 2;
+          const und = Math.sin(t * 6.5 + i * 1.1) * 0.07;
+          const h = (1.6 + und) * grow;
+          mesh.position.set(Math.cos(a) * radius, h * 0.5 + 0.04, Math.sin(a) * radius);
+          // Face outward (radial) so the curtain reads from the side
+          mesh.rotation.set(0, -a + Math.PI / 2, Math.sin(t * 4 + i) * 0.08);
+          mesh.scale.set(0.85 + Math.sin(t * 8 + i * 0.7) * 0.12, grow, 1);
+          const flicker = Math.sin(t * 16 + i * 2.1) * 0.08;
+          rMat.opacity = 0.45 + (1 - life) * 0.28 + flicker + life * 0.15;
+        }
+      }
+    }
+
     // Melee rising edge — punch + SFX (sprite swap when assets exist).
     if (anim === "melee" && u.animUntil > lastAnimUntil.current) {
       lastAnimUntil.current = u.animUntil;
@@ -963,9 +1088,9 @@ function MobBillboard({ unitId, unit }: { unitId: string; unit: UnitSnapshot }) 
       const pulse = 0.85 + Math.sin(performance.now() / 55) * 0.15;
       mat.current.color.setRGB(0.95 * pulse, 0.55 * pulse, 0.35 * pulse);
     } else if (casting) {
-      // Subtle cast tint — ground magic circle is the primary tell.
+      // Subtle cast tint — cool blue to match ground/ribbon palette.
       const pulse = 0.94 + Math.sin(performance.now() / 110) * 0.06;
-      mat.current.color.setRGB(1.0 * pulse, 0.82 * pulse, 0.62 * pulse);
+      mat.current.color.setRGB(0.72 * pulse, 0.86 * pulse, 1.0 * pulse);
     } else if (attackFlash) {
       const pulse = 0.92 + Math.sin(performance.now() / 40) * 0.08;
       mat.current.color.setRGB(1.0 * pulse, 0.78 * pulse, 0.55 * pulse);
@@ -987,6 +1112,7 @@ function MobBillboard({ unitId, unit }: { unitId: string; unit: UnitSnapshot }) 
       if (castTelegraph.current) castTelegraph.current.visible = false;
       if (castCircleGround.current) castCircleGround.current.visible = false;
       if (castCircleInner.current) castCircleInner.current.visible = false;
+      if (castRibbonGroup.current) castRibbonGroup.current.visible = false;
     } else {
       mat.current.opacity = 1;
       if (barsRoot.current) barsRoot.current.visible = true;
@@ -1038,7 +1164,7 @@ function MobBillboard({ unitId, unit }: { unitId: string; unit: UnitSnapshot }) 
       >
         <ringGeometry args={[0.45, 1.35, 56]} />
         <meshBasicMaterial
-          color="#ff7040"
+          color="#4080ff"
           transparent
           opacity={0.35}
           depthWrite={false}
@@ -1059,7 +1185,7 @@ function MobBillboard({ unitId, unit }: { unitId: string; unit: UnitSnapshot }) 
         <meshBasicMaterial
           ref={castCircleMat}
           map={enemyCastTex}
-          color="#ffb080"
+          color="#a0d0ff"
           transparent
           opacity={0.7}
           depthWrite={false}
@@ -1079,7 +1205,7 @@ function MobBillboard({ unitId, unit }: { unitId: string; unit: UnitSnapshot }) 
         <meshBasicMaterial
           ref={castInnerMat}
           map={enemyCastInnerTex}
-          color="#ffd0a0"
+          color="#e8f4ff"
           transparent
           opacity={0.75}
           depthWrite={false}
@@ -1088,6 +1214,36 @@ function MobBillboard({ unitId, unit }: { unitId: string; unit: UnitSnapshot }) 
           side={THREE.DoubleSide}
         />
       </mesh>
+
+      {/* Rising magical-wave ribbon curtain — extrudes upward from the ground circle */}
+      <group ref={castRibbonGroup} visible={false}>
+        {Array.from({ length: CAST_RIBBON_COUNT }, (_, i) => (
+          <mesh
+            key={`cast-ribbon-${i}`}
+            ref={(m) => {
+              castRibbonMeshes.current[i] = m;
+            }}
+            position={[0, 0.9, 0]}
+            visible
+            renderOrder={5}
+          >
+            <planeGeometry args={[0.55, 2.0]} />
+            <meshBasicMaterial
+              ref={(m) => {
+                castRibbonMats.current[i] = m;
+              }}
+              map={enemyCastRibbonTex}
+              color="#c0e0ff"
+              transparent
+              opacity={0.55}
+              depthWrite={false}
+              toneMapped={false}
+              blending={THREE.AdditiveBlending}
+              side={THREE.DoubleSide}
+            />
+          </mesh>
+        ))}
+      </group>
 
       {unit.shiny && <ShinySparkles height={spriteH0} />}
       <group ref={billboard}>
@@ -1230,6 +1386,9 @@ function SheetBillboardInner({
   const castCircleInner = useRef<THREE.Mesh>(null);
   const castCircleMat = useRef<THREE.MeshBasicMaterial>(null);
   const castInnerMat = useRef<THREE.MeshBasicMaterial>(null);
+  const castRibbonGroup = useRef<THREE.Group>(null);
+  const castRibbonMeshes = useRef<(THREE.Mesh | null)[]>([]);
+  const castRibbonMats = useRef<(THREE.MeshBasicMaterial | null)[]>([]);
   const lastUrl = useRef("");
   const lastFacing = useRef<ReturnType<typeof facingPick> | null>(null);
   const lastAnimUntil = useRef(0);
@@ -1250,6 +1409,7 @@ function SheetBillboardInner({
   const pulseTex = useMemo(() => makeResonanceRingTexture(), []);
   const enemyCastTex = useMemo(() => makeEnemyCastCircleTexture("outer"), []);
   const enemyCastInnerTex = useMemo(() => makeEnemyCastCircleTexture("inner"), []);
+  const enemyCastRibbonTex = useMemo(() => makeEnemyCastRibbonTexture(), []);
   const tdRingTex = useMemo(() => makeEarthChronaRingTexture(), []);
   const tdCrackTex = useMemo(() => makeChronaCrackTexture(), []);
   const petrifyTex = useMemo(() => makePetrifyCrackTexture(), []);
@@ -1259,11 +1419,12 @@ function SheetBillboardInner({
       pulseTex.dispose();
       enemyCastTex.dispose();
       enemyCastInnerTex.dispose();
+      enemyCastRibbonTex.dispose();
       tdRingTex.dispose();
       tdCrackTex.dispose();
       petrifyTex.dispose();
     },
-    [orbTex, pulseTex, enemyCastTex, enemyCastInnerTex, tdRingTex, tdCrackTex, petrifyTex],
+    [orbTex, pulseTex, enemyCastTex, enemyCastInnerTex, enemyCastRibbonTex, tdRingTex, tdCrackTex, petrifyTex],
   );
 
   const jobKey = unit.kind === "player" ? (unit.job ?? "time_mage") : "mob";
@@ -1374,7 +1535,7 @@ function SheetBillboardInner({
         castTelegraph.current.rotation.z = u.kind === "mob" ? t * 0.7 : performance.now() / 900;
         const matC = castTelegraph.current.material as THREE.MeshBasicMaterial;
         matC.opacity = u.kind === "mob" ? 0.28 + (1 - life) * 0.22 + Math.sin(t * 9) * 0.05 : 0.25 + (1 - life) * 0.45;
-        matC.color.set(u.kind === "mob" ? "#ff7040" : "#70c0e8");
+        matC.color.set(u.kind === "mob" ? "#4080ff" : "#70c0e8");
       }
     }
 
@@ -1411,6 +1572,36 @@ function SheetBillboardInner({
         castCircleInner.current.rotation.z = -t * 2.55;
         const frameFlicker = Math.sin(t * 17) * 0.07;
         castInnerMat.current.opacity = 0.7 + (1 - life) * 0.18 + frameFlicker;
+      }
+    }
+
+    // Rising magical-wave ribbons — extrude upward from the ground circle (mob only)
+    if (castRibbonGroup.current) {
+      const show = casting && u.kind === "mob";
+      castRibbonGroup.current.visible = show;
+      if (show) {
+        const t = performance.now() / 1000;
+        const remain = Math.max(0, u.animUntil - Date.now());
+        const life = 1 - Math.min(1, remain / 1000);
+        castRibbonGroup.current.rotation.y = t * 1.35;
+        const grow = 0.22 + life * 0.78;
+        const radius = 0.95 + life * 0.2 + Math.sin(t * 5) * 0.03;
+        if (enemyCastRibbonTex) {
+          enemyCastRibbonTex.offset.y = (t * 0.85) % 1;
+        }
+        for (let i = 0; i < CAST_RIBBON_COUNT; i++) {
+          const mesh = castRibbonMeshes.current[i];
+          const rMat = castRibbonMats.current[i];
+          if (!mesh || !rMat) continue;
+          const a = (i / CAST_RIBBON_COUNT) * Math.PI * 2;
+          const und = Math.sin(t * 6.5 + i * 1.1) * 0.07;
+          const h = (1.6 + und) * grow;
+          mesh.position.set(Math.cos(a) * radius, h * 0.5 + 0.04, Math.sin(a) * radius);
+          mesh.rotation.set(0, -a + Math.PI / 2, Math.sin(t * 4 + i) * 0.08);
+          mesh.scale.set(0.85 + Math.sin(t * 8 + i * 0.7) * 0.12, grow, 1);
+          const flicker = Math.sin(t * 16 + i * 2.1) * 0.08;
+          rMat.opacity = 0.45 + (1 - life) * 0.28 + flicker + life * 0.15;
+        }
       }
     }
 
@@ -2019,7 +2210,7 @@ function SheetBillboardInner({
       >
         <ringGeometry args={[0.45, 1.35, 56]} />
         <meshBasicMaterial
-          color="#ff7040"
+          color="#4080ff"
           transparent
           opacity={0.35}
           depthWrite={false}
@@ -2040,7 +2231,7 @@ function SheetBillboardInner({
         <meshBasicMaterial
           ref={castCircleMat}
           map={enemyCastTex}
-          color="#ffb080"
+          color="#a0d0ff"
           transparent
           opacity={0.7}
           depthWrite={false}
@@ -2060,7 +2251,7 @@ function SheetBillboardInner({
         <meshBasicMaterial
           ref={castInnerMat}
           map={enemyCastInnerTex}
-          color="#ffd0a0"
+          color="#e8f4ff"
           transparent
           opacity={0.75}
           depthWrite={false}
@@ -2069,6 +2260,36 @@ function SheetBillboardInner({
           side={THREE.DoubleSide}
         />
       </mesh>
+
+      {/* Rising magical-wave ribbon curtain — extrudes upward from the ground circle */}
+      <group ref={castRibbonGroup} visible={false}>
+        {Array.from({ length: CAST_RIBBON_COUNT }, (_, i) => (
+          <mesh
+            key={`cast-ribbon-inner-${i}`}
+            ref={(m) => {
+              castRibbonMeshes.current[i] = m;
+            }}
+            position={[0, 0.9, 0]}
+            visible
+            renderOrder={5}
+          >
+            <planeGeometry args={[0.55, 2.0]} />
+            <meshBasicMaterial
+              ref={(m) => {
+                castRibbonMats.current[i] = m;
+              }}
+              map={enemyCastRibbonTex}
+              color="#c0e0ff"
+              transparent
+              opacity={0.55}
+              depthWrite={false}
+              toneMapped={false}
+              blending={THREE.AdditiveBlending}
+              side={THREE.DoubleSide}
+            />
+          </mesh>
+        ))}
+      </group>
 
       {/* Temporal Distortion â€” earth + chrona hit (ground + debris); crack/petrify on billboard */}
       <group ref={tdGroup} visible={false}>
