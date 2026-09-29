@@ -1,3 +1,4 @@
+import { isTrainerFreeAbility } from "./trainer";
 /**
  * Rogue kit — evasion / crit opener (jobs-from-plan §4.2).
  * Feel: fast, violet smoke, dagger crits; Ghost Step for survival, Backblade for openers.
@@ -168,8 +169,16 @@ export function isRogueAbilityId(id: string): id is RogueAbilityId {
   return Object.prototype.hasOwnProperty.call(ROGUE_ABILITIES, id);
 }
 
-export function rogueAbilitiesUnlocked(level: number): RogueAbilityId[] {
-  return ROGUE_ABILITY_IDS.filter((id) => ROGUE_ABILITIES[id].unlockLevel <= level);
+export function rogueAbilitiesUnlocked(
+  level: number,
+  learned: readonly string[] = [],
+): RogueAbilityId[] {
+  const learnedSet = new Set(learned);
+  return ROGUE_ABILITY_IDS.filter((id) => {
+    if (ROGUE_ABILITIES[id].unlockLevel > level) return false;
+    if (isTrainerFreeAbility(id)) return true;
+    return learnedSet.has(id);
+  });
 }
 
 export function rogueHotbarOrder(unlocked: readonly RogueAbilityId[]): RogueAbilityId[] {

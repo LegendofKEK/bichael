@@ -4,6 +4,7 @@
  */
 
 import { SHARED_ABILITY_ICON } from "./shared-icons";
+import { isTrainerFreeAbility } from "./trainer";
 
 export const BATTLEMAGE_ABILITY_IDS = [
   "rest",
@@ -663,8 +664,16 @@ export function isBattleMageAbilityId(id: string): id is BattleMageAbilityId {
   return Object.prototype.hasOwnProperty.call(BATTLEMAGE_ABILITIES, id);
 }
 
-export function battleMageAbilitiesUnlocked(level: number): BattleMageAbilityId[] {
-  return BATTLEMAGE_ABILITY_IDS.filter((id) => BATTLEMAGE_ABILITIES[id].unlockLevel <= level);
+export function battleMageAbilitiesUnlocked(
+  level: number,
+  learned: readonly string[] = [],
+): BattleMageAbilityId[] {
+  const learnedSet = new Set(learned);
+  return BATTLEMAGE_ABILITY_IDS.filter((id) => {
+    if (BATTLEMAGE_ABILITIES[id].unlockLevel > level) return false;
+    if (isTrainerFreeAbility(id)) return true;
+    return learnedSet.has(id);
+  });
 }
 
 export function battleMageHotbarOrder(unlocked: readonly BattleMageAbilityId[]): BattleMageAbilityId[] {

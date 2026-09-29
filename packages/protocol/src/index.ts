@@ -270,7 +270,7 @@ export type SnapshotMessage = {
     recasts: Partial<Record<AbilityId, number>>;
     /** Unlocked ability ids for current job/level (hotbar + spellbook). */
     unlocked: AbilityId[];
-    /** Spells purchased from the Chronomancer (TIM). */
+    /** Abilities purchased from the Trainer (persists on character). */
     learned: AbilityId[];
     /** Master skill tree — unlocked node ids (includes free main hub). */
     skillUnlocked: string[];

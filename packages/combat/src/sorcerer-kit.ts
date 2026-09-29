@@ -5,6 +5,7 @@
  */
 
 import { SHARED_ABILITY_ICON } from "./shared-icons";
+import { isTrainerFreeAbility } from "./trainer";
 
 export const SORCERER_ABILITY_IDS = [
   "rest",
@@ -495,8 +496,16 @@ export function isSorcererSpell(id: SorcererAbilityId): boolean {
   return cat === "elemental" || cat === "enfeeble" || cat === "dark" || cat === "travel";
 }
 
-export function sorcererAbilitiesUnlocked(level: number): SorcererAbilityId[] {
-  return SORCERER_ABILITY_IDS.filter((id) => SORCERER_ABILITIES[id].unlockLevel <= level);
+export function sorcererAbilitiesUnlocked(
+  level: number,
+  learned: readonly string[] = [],
+): SorcererAbilityId[] {
+  const learnedSet = new Set(learned);
+  return SORCERER_ABILITY_IDS.filter((id) => {
+    if (SORCERER_ABILITIES[id].unlockLevel > level) return false;
+    if (isTrainerFreeAbility(id)) return true;
+    return learnedSet.has(id);
+  });
 }
 
 export function sorcererHotbarOrder(unlocked: readonly SorcererAbilityId[]): SorcererAbilityId[] {

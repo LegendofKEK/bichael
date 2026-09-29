@@ -1,7 +1,8 @@
+import { isTrainerFreeAbility, trainerAbilityDustCost } from "./trainer";
 /**
  * Full Time Mage ability kit (design §9), with MVP-feel numbers where noted.
- * Spells (time/enhance/enfeeble/heal) are bought from the Chronomancer.
- * Stances, Rest, and JAs unlock by job level alone.
+ * Non-starter abilities are bought from the Trainer (Dust 500–10000).
+ * Free starter: Rest, Flux, Temporal Distortion (see trainer.ts).
  */
 
 import { SHARED_ABILITY_ICON } from "./shared-icons";
@@ -560,7 +561,7 @@ export function timAbilityIconUrl(id: TimAbilityId | string): string {
   return `/icons/abilities/${id}.png`;
 }
 
-/** Spells must be purchased from the Chronomancer (trainer NPC). */
+/** Category helper — scroll-style TIM spells (legacy; Trainer now sells all non-free). */
 export function isTimSpell(id: TimAbilityId): boolean {
   const cat = TIM_ABILITIES[id].category;
   return cat === "time" || cat === "enhance" || cat === "enfeeble" || cat === "heal";
@@ -568,8 +569,7 @@ export function isTimSpell(id: TimAbilityId): boolean {
 
 /** Dust cost to learn a spell scroll. */
 export function timSpellDustCost(id: TimAbilityId): number {
-  const lv = TIM_ABILITIES[id].unlockLevel;
-  return Math.max(15, lv * 5);
+  return trainerAbilityDustCost(TIM_ABILITIES[id].unlockLevel);
 }
 
 /**
@@ -577,22 +577,21 @@ export function timSpellDustCost(id: TimAbilityId): number {
  */
 export function timAbilitiesUnlocked(
   level: number,
-  learned: readonly TimAbilityId[] = [],
+  learned: readonly string[] = [],
 ): TimAbilityId[] {
   const learnedSet = new Set(learned);
   return TIM_ABILITY_IDS.filter((id) => {
     const def = TIM_ABILITIES[id];
     if (def.unlockLevel > level) return false;
-    if (isTimSpell(id)) return learnedSet.has(id);
-    return true;
+    if (isTrainerFreeAbility(id)) return true;
+    return learnedSet.has(id);
   });
 }
 
-/** Spells the Chronomancer will sell at this level (not yet learned). */
-export function timSpellsForSale(level: number, learned: readonly TimAbilityId[]): TimAbilityId[] {
+export function timSpellsForSale(level: number, learned: readonly string[]): TimAbilityId[] {
   const learnedSet = new Set(learned);
   return TIM_ABILITY_IDS.filter((id) => {
-    if (!isTimSpell(id)) return false;
+    if (isTrainerFreeAbility(id)) return false;
     if (learnedSet.has(id)) return false;
     return TIM_ABILITIES[id].unlockLevel <= level;
   });

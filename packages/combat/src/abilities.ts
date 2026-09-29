@@ -187,6 +187,19 @@ import {
 
 
 import type { JobId } from "./jobs";
+import {
+  isTrainerFreeAbility,
+  trainerAbilityDustCost,
+} from "./trainer";
+export {
+  TRAINER_COST_MAX,
+  TRAINER_COST_MAX_LEVEL,
+  TRAINER_COST_MIN,
+  TRAINER_FREE_ABILITY_IDS,
+  isTrainerFreeAbility,
+  requiresTrainerPurchase,
+  trainerAbilityDustCost,
+} from "./trainer";
 
 import { SHARED_ABILITY_ICON } from "./shared-icons";
 
@@ -423,29 +436,18 @@ export function hotbarOrderDual(
 
 
 export function abilitiesUnlockedForJob(
-
   job: JobId,
-
   level: number,
-
-  learned: readonly TimAbilityId[] = [],
-
+  learned: readonly string[] = [],
 ): AbilityId[] {
-
   if (job === "time_mage") return timAbilitiesUnlocked(level, learned);
-
-  if (job === "knight") return knightAbilitiesUnlocked(level);
-
-  if (job === "rogue") return rogueAbilitiesUnlocked(level);
-
-  if (job === "sorcerer") return sorcererAbilitiesUnlocked(level);
-
-  if (job === "fighter") return fighterAbilitiesUnlocked(level);
-
-  if (job === "cleric") return clericAbilitiesUnlocked(level);
-  if (job === "battle_mage") return battleMageAbilitiesUnlocked(level);
+  if (job === "knight") return knightAbilitiesUnlocked(level, learned);
+  if (job === "rogue") return rogueAbilitiesUnlocked(level, learned);
+  if (job === "sorcerer") return sorcererAbilitiesUnlocked(level, learned);
+  if (job === "fighter") return fighterAbilitiesUnlocked(level, learned);
+  if (job === "cleric") return clericAbilitiesUnlocked(level, learned);
+  if (job === "battle_mage") return battleMageAbilitiesUnlocked(level, learned);
   return [];
-
 }
 
 
@@ -672,3 +674,71 @@ export function categoryTabsDual(
 }
 
 
+
+
+export function abilityUnlockLevel(id: AbilityId): number {
+  if (isWeaponTpAbilityId(id)) return WEAPON_TP_ABILITIES[id].unlockLevel ?? 1;
+  if (isTimAbilityId(id)) return TIM_ABILITIES[id].unlockLevel;
+  if (isKnightAbilityId(id)) return KNIGHT_ABILITIES[id].unlockLevel;
+  if (isRogueAbilityId(id)) return ROGUE_ABILITIES[id].unlockLevel;
+  if (isSorcererAbilityId(id)) return SORCERER_ABILITIES[id].unlockLevel;
+  if (isFighterAbilityId(id)) return FIGHTER_ABILITIES[id].unlockLevel;
+  if (isClericAbilityId(id)) return CLERIC_ABILITIES[id].unlockLevel;
+  if (isBattleMageAbilityId(id)) return BATTLEMAGE_ABILITIES[id].unlockLevel;
+  return 1;
+}
+
+/** All ability ids belonging to a job kit (excludes weapon skills). */
+export function abilityIdsForJob(job: JobId): AbilityId[] {
+  if (job === "time_mage") return [...TIM_ABILITY_IDS];
+  if (job === "knight") return [...KNIGHT_ABILITY_IDS];
+  if (job === "rogue") return [...ROGUE_ABILITY_IDS];
+  if (job === "sorcerer") return [...SORCERER_ABILITY_IDS];
+  if (job === "fighter") return [...FIGHTER_ABILITY_IDS];
+  if (job === "cleric") return [...CLERIC_ABILITY_IDS];
+  if (job === "battle_mage") return [...BATTLEMAGE_ABILITY_IDS];
+  return [];
+}
+
+/** Trainer stock for a job at effective level (not free starter, not yet learned). */
+export function jobAbilitiesForSale(
+  job: JobId,
+  level: number,
+  learned: readonly string[],
+): AbilityId[] {
+  const learnedSet = new Set(learned);
+  return abilityIdsForJob(job).filter((id) => {
+    if (isTrainerFreeAbility(id)) return false;
+    if (learnedSet.has(id)) return false;
+    return abilityUnlockLevel(id) <= level;
+  });
+}
+
+/** Trainer offers for main + support jobs at their effective levels. */
+export function trainerOffersForJobs(
+  main: JobId,
+  mainLevel: number,
+  sub: JobId | null | undefined,
+  subLevel: number,
+  learned: readonly string[],
+): { id: AbilityId; label: string; cost: number; unlockLevel: number }[] {
+  const seen = new Set<string>();
+  const out: { id: AbilityId; label: string; cost: number; unlockLevel: number }[] = [];
+  const add = (job: JobId, level: number) => {
+    for (const id of jobAbilitiesForSale(job, level, learned)) {
+      if (seen.has(id)) continue;
+      seen.add(id);
+      const unlockLevel = abilityUnlockLevel(id);
+      out.push({
+        id,
+        label: abilityLabel(id),
+        cost: trainerAbilityDustCost(unlockLevel),
+        unlockLevel,
+      });
+    }
+  };
+  add(main, mainLevel);
+  if (sub && sub !== main && subLevel > 0) add(sub, subLevel);
+  out.sort((a, b) => a.unlockLevel - b.unlockLevel || a.label.localeCompare(b.label));
+  return out;
+}

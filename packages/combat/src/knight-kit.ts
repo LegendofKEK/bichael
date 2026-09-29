@@ -5,6 +5,7 @@
  */
 
 import { SHARED_ABILITY_ICON } from "./shared-icons";
+import { isTrainerFreeAbility } from "./trainer";
 
 export const KNIGHT_ABILITY_IDS = [
   // utility
@@ -373,14 +374,22 @@ export function isKnightAbilityId(id: string): id is KnightAbilityId {
   return Object.prototype.hasOwnProperty.call(KNIGHT_ABILITIES, id);
 }
 
-/** Knight spells unlock by level (no separate trainer in MVP). */
+/** Knight scroll-style categories (legacy helper). */
 export function isKnightSpell(id: KnightAbilityId): boolean {
   const cat = KNIGHT_ABILITIES[id].category;
   return cat === "heal" || cat === "divine" || cat === "enhance" || cat === "enfeeble";
 }
 
-export function knightAbilitiesUnlocked(level: number): KnightAbilityId[] {
-  return KNIGHT_ABILITY_IDS.filter((id) => KNIGHT_ABILITIES[id].unlockLevel <= level);
+export function knightAbilitiesUnlocked(
+  level: number,
+  learned: readonly string[] = [],
+): KnightAbilityId[] {
+  const learnedSet = new Set(learned);
+  return KNIGHT_ABILITY_IDS.filter((id) => {
+    if (KNIGHT_ABILITIES[id].unlockLevel > level) return false;
+    if (isTrainerFreeAbility(id)) return true;
+    return learnedSet.has(id);
+  });
 }
 
 /** Preferred hotbar order — hate tools and DT first. */

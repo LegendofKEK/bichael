@@ -5,6 +5,7 @@
  */
 
 import { SHARED_ABILITY_ICON } from "./shared-icons";
+import { isTrainerFreeAbility } from "./trainer";
 
 export const CLERIC_ABILITY_IDS = [
   "rest",
@@ -717,8 +718,16 @@ export function isClericAbilityId(id: string): id is ClericAbilityId {
   return Object.prototype.hasOwnProperty.call(CLERIC_ABILITIES, id);
 }
 
-export function clericAbilitiesUnlocked(level: number): ClericAbilityId[] {
-  return CLERIC_ABILITY_IDS.filter((id) => CLERIC_ABILITIES[id].unlockLevel <= level);
+export function clericAbilitiesUnlocked(
+  level: number,
+  learned: readonly string[] = [],
+): ClericAbilityId[] {
+  const learnedSet = new Set(learned);
+  return CLERIC_ABILITY_IDS.filter((id) => {
+    if (CLERIC_ABILITIES[id].unlockLevel > level) return false;
+    if (isTrainerFreeAbility(id)) return true;
+    return learnedSet.has(id);
+  });
 }
 
 export function clericHotbarOrder(unlocked: readonly ClericAbilityId[]): ClericAbilityId[] {

@@ -2476,7 +2476,7 @@ function HubEncampment({
       </group>
 
       {/* —— 2 A-frame tents (olive / beige) + interiors —— */}
-      {/* West — Chronomancer / west tent */}
+      {/* West — Trainer / west tent */}
       <CampTent
         x={-5.6}
         z={4.2}
@@ -2506,8 +2506,8 @@ function HubEncampment({
       {/* —— Craft lean-to / awning (east — Craft Master) —— */}
       <CraftLeanTo x={4.6} z={-0.9} y={y0} yaw={-0.35} cloth={olive} clothShade={oliveShade} woodMap={woodMap} canvasMap={oliveClothMap} ashWood={ashWood} iron={iron} />
 
-      {/* —— Chronomancer desk (near -3.2, 4.8) —— */}
-      <ChronomancerStation x={-4.35} z={3.55} y={y0} yaw={0.4} woodMap={woodMap} ashWood={ashWood} />
+      {/* —— Trainer desk (near -3.2, 4.8) —— */}
+      <TrainerStation x={-4.35} z={3.55} y={y0} yaw={0.4} woodMap={woodMap} ashWood={ashWood} />
 
       {/* —— Provisioner stall (near -3.8, -0.2) —— */}
       <ProvisionerStall x={-3.5} z={-1.35} y={y0} yaw={0.15} woodMap={woodMap} ashWood={ashWood} crateWood={crateWood} iron={iron} />
@@ -2611,7 +2611,7 @@ function HubEncampment({
   );
 }
 
-function ChronomancerStation({
+function TrainerStation({
   x,
   z,
   y,
