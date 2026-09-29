@@ -12,7 +12,7 @@ import {
   fStr,
   jobStatsAtLevel,
   physicalDamage,
-  weaponTpBonusDamage,
+  weaponTpBonusMul,
   weaponTypeFromTokenId,
   type JobId,
 } from "@bellgrave/combat";
@@ -68,6 +68,8 @@ export type WeaponTpCtx = {
     int: number;
     mnd: number;
   };
+  /** Skill-tree atk bonus (same as autos). Per-weapon combat skills deferred (#106). */
+  playerTreeAtk: (p: WeaponTpPlayer) => number;
 };
 
 function applyEffects(mob: WeaponTpMob, def: WeaponTpDef, now: number) {
@@ -132,33 +134,36 @@ export function resolveWeaponTpAbility(
   p.anim = "melee";
   p.animUntil = now + 520;
 
+  // Scale TP bonus from TP *before* spend; cost still WEAPON_TP_COST.
+  const tpBefore = p.tp;
+  const tpMul = weaponTpBonusMul(tpBefore);
   p.tp -= WEAPON_TP_COST;
-  const bonus = weaponTpBonusDamage(p.tp);
   p.recasts[id as AbilityId] = now + def.recastMs;
 
   const stats = ctx.playerCombatStats(p);
-  const physical = p.job !== "time_mage" && p.job !== "sorcerer" && p.job !== "cleric";
   let att = attackFromStats(stats, "none", ctx.playerWeaponBonus(p), { physical: true });
+  // Skill-tree atk (mirrors autos). Dedicated per-weapon combat skill levels: deferred (#106).
+  att += ctx.playerTreeAtk(p);
   const mobStats = jobStatsAtLevel(mob.job, mob.level);
   let defStat = defenseFromVit(mobStats.vit);
   if (now < mob.diaUntil) defStat = Math.max(1, Math.floor(defStat * 0.7));
 
   const hits = Math.max(1, def.hits);
-  const perHitBonus = Math.floor(bonus / hits);
-  let bonusLeft = bonus - perHitBonus * hits;
   let total = 0;
+  let totalBonus = 0;
   const parts: number[] = [];
 
   for (let i = 0; i < hits; i++) {
-    let hit = physicalDamage(
+    const base = physicalDamage(
       att,
       defStat,
       fStr(stats.str, mobStats.vit),
       false,
     );
-    hit = Math.max(1, Math.floor(hit * def.ftp));
-    hit += perHitBonus;
-    if (i === hits - 1) hit += bonusLeft;
+    const core = Math.max(1, Math.floor(base * def.ftp));
+    const bonus = Math.max(0, Math.floor(core * tpMul));
+    const hit = core + bonus;
+    totalBonus += bonus;
     parts.push(hit);
     total += hit;
     mob.hp = Math.max(0, mob.hp - hit);
@@ -173,7 +178,7 @@ export function resolveWeaponTpAbility(
       : "";
   ctx.pushLog(
     p,
-    `${def.label}! ${parts.join("+")}=${total} (${hits} hit${hits > 1 ? "s" : ""}, +${bonus} TP bonus)${fxNote}`,
+    `${def.label}! ${parts.join("+")}=${total} (${hits} hit${hits > 1 ? "s" : ""}, TP x${tpMul.toFixed(2)} +${totalBonus})${fxNote}`,
   );
 
   if (mob.hp <= 0) {
