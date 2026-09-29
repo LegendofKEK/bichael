@@ -212,7 +212,8 @@ export function resolveTimAbility(
       return;
     }
   }
-  if (def.staffRequired && !staffEquipped(p)) {
+  // Signature staff only when this job is main (support dual-job skips it).
+  if (def.staffRequired && p.job === "time_mage" && !staffEquipped(p)) {
     hooks.pushLog(`Equip Ashbeam Staff to use ${def.label}.`);
     return;
   }

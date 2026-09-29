@@ -503,7 +503,7 @@ export function fighterAbilityTooltip(id: FighterAbilityId): {
 
   if (def.needsTarget) bits.push("Target");
 
-  if (def.weaponRequired) bits.push("Greatsword");
+  if (def.weaponRequired) bits.push("Greatsword (main)");
 
   return { title: def.label, body: FIGHTER_ABILITY_BLURBS[id], meta: bits.join(" · ") };
 

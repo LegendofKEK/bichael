@@ -731,7 +731,7 @@ export function battleMageAbilityTooltip(id: BattleMageAbilityId): {
     bits.push(`Magic DT −${Math.round((1 - def.magDt) * 100)}%`);
   }
   if (def.needsTarget) bits.push("Target");
-  if (def.weaponRequired) bits.push("Sword");
+  if (def.weaponRequired) bits.push("Sword (main)");
   if (def.toggle) bits.push("Toggle");
   return { title: def.label, body: blurb, meta: bits.join(" · ") };
 }

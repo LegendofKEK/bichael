@@ -236,7 +236,8 @@ export function resolveClericAbility(
     hooks.pushLog(p, "Not enough MP.");
     return true;
   }
-  if (def.staffRequired && !staffEquipped(p)) {
+  // Signature staff only when this job is main (support dual-job skips it).
+  if (def.staffRequired && p.job === "cleric" && !staffEquipped(p)) {
     hooks.pushLog(p, "Equip your staff first.");
     return true;
   }

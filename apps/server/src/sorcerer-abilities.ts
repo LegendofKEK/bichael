@@ -171,7 +171,8 @@ export function resolveSorcererAbility(
     return true;
   }
 
-  if (def.staffRequired && !staffEquipped(p)) {
+  // Signature staff only when this job is main (support dual-job skips it).
+  if (def.staffRequired && p.job === "sorcerer" && !staffEquipped(p)) {
     hooks.pushLog(p, "Equip your staff first.");
     return true;
   }
