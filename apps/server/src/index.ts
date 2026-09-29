@@ -395,6 +395,9 @@ type Mob = {
 };
 
 const PORT = Number(process.env.PORT ?? 8787);
+/** Dev cheats (Max Lv). On unless NODE_ENV=production; set ALLOW_DEBUG_CHEATS=1 to force on in prod. */
+const DEBUG_CHEATS_ENABLED =
+  process.env.ALLOW_DEBUG_CHEATS === "1" || process.env.NODE_ENV !== "production";
 const players = new Map<string, Player>();
 const walletToPlayer = new Map<string, string>();
 /** Per-wallet character roster — live progress objects (same refs as active when online). */
@@ -2289,6 +2292,10 @@ function handleFreeStat(p: Player, attr: AttrKey, delta: 1 | -1 = 1) {
 }
 
 function handleDebugMaxLevel(p: Player) {
+  if (!DEBUG_CHEATS_ENABLED) {
+    pushLog(p, "Debug cheats are disabled on this server.");
+    return;
+  }
   ensureSkillPointBank(p);
   const from = p.level;
   if (from < MAX_LEVEL) {
@@ -3272,6 +3279,11 @@ function handleGather(p: Player, nodeId: string) {
 }
 
 function handleCraft(p: Player, itemId: number) {
+  const crafter = PH_HUB_NPCS.find((n) => n.role === "crafter");
+  if (!crafter || dist(p.x, p.z, crafter.x, crafter.z) > NPC_INTERACT_RANGE) {
+    pushLog(p, "You must be near the Craft Master to craft.");
+    return;
+  }
   const def = getCraftableItem(itemId);
   if (!def || !def.craftSkill || def.craftLevel == null) {
     pushLog(p, "That cannot be crafted.");
