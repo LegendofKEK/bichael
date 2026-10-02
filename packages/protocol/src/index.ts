@@ -304,6 +304,8 @@ export type SpellOffer = {
   label: string;
   cost: number;
   unlockLevel: number;
+  /** Main job (full level) or support job (half level) offer track. */
+  track?: "main" | "support";
 };
 
 export type ServerMessage =

@@ -2,7 +2,7 @@ import { isTrainerFreeAbility } from "./trainer";
 /**
  * Rogue kit — evasion / crit opener (jobs-from-plan §4.2).
  * Feel: fast, violet smoke, dagger crits; Ghost Step for survival, Backblade for openers.
- * No native spells — no spellbook.
+ * No native spells (JA/utility kit). Ability book + hotbar drag still apply.
  * FX: violet smoke, cut lines — not TIM teal, not Knight pale-gold.
  */
 

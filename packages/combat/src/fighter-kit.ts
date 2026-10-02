@@ -5,7 +5,7 @@ import { isTrainerFreeAbility } from "./trainer";
 
  * Feel: two-hander, iron sparks, oxblood rage; WS / TP focus.
 
- * No native spells — no spellbook.
+ * No native spells (physical kit). Ability book + hotbar drag still apply.
 
  * FX: iron sparks, blood-red rage — not magic circles.
 
