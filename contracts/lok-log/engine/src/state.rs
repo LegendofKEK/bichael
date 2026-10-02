@@ -6,7 +6,7 @@ use crate::abi::{keccak256, Buf};
 use crate::u256::U256;
 
 /// Map keys. Declaration order is the `BTreeMap` order for the scalar fields.
-/// `Item` sorts last, then by item id. No input in this slice writes `Item` or credits `Kek`.
+/// `Item` sorts last, then by item id. Spawn does not credit `Kek`. The world log credits a deposit, never a transfer.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Key {
     TokenId,
@@ -50,6 +50,18 @@ impl State {
         self.map.insert(Key::UnspentPoints, U256::ZERO);
         // Deposit-only. Spawn does not grant KEK.
         self.map.insert(Key::Kek, U256::ZERO);
+    }
+
+    pub(crate) fn set_kek(&mut self, amount: U256) {
+        self.map.insert(Key::Kek, amount);
+    }
+
+    pub(crate) fn set_item(&mut self, item_id: U256, amount: U256) {
+        if amount == U256::ZERO {
+            self.map.remove(&Key::Item(item_id));
+        } else {
+            self.map.insert(Key::Item(item_id), amount);
+        }
     }
 
     /// Bit layout from `CharacterCheckpoint.summary`.

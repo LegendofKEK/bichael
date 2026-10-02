@@ -2,7 +2,7 @@
 name = "lok-engine"
 version = "0.1.0"
 edition = "2021"
-description = "Bellgrave lok engine, first slice: state, canonical keccak, genesis, hash-chained log"
+description = "Bellgrave lok engine: state, hash-chained log, item and KEK transfers, auction house"
 license = "MIT"
 publish = false
 

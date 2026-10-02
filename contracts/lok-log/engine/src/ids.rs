@@ -36,3 +36,9 @@ pub fn unique_id(type_id: &str, instance_id: u64) -> U256 {
     raw.extend_from_slice(&instance_id.to_be_bytes());
     U256(keccak256(&raw))
 }
+
+/// Chain head before any world-log event. Not a character genesis root.
+pub fn world_genesis() -> [u8; 32] {
+    keccak256(b"LOK_WORLD_V1")
+}
+

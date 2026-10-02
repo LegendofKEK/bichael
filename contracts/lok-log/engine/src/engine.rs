@@ -13,6 +13,20 @@ pub enum EngineError {
     AlreadySpawned,
     /// Spawn named a different token or job than the genesis anchor.
     SpawnMismatch,
+    NotSpawned,
+    SelfTransfer,
+    ZeroAmount,
+    InsufficientKek,
+    InsufficientItem,
+    Overflow,
+    ListingExists,
+    AlreadyListed,
+    UnknownListing,
+    BidNotHigher,
+    NotSeller,
+    NoBid,
+    /// Transfers and the auction house belong on the world log, not a single-character log.
+    NotOnCharacterLog,
 }
 
 impl fmt::Display for EngineError {
@@ -20,6 +34,19 @@ impl fmt::Display for EngineError {
         match self {
             Self::AlreadySpawned => write!(f, "already spawned"),
             Self::SpawnMismatch => write!(f, "spawn does not match genesis identity"),
+            Self::NotSpawned => write!(f, "character is not spawned"),
+            Self::SelfTransfer => write!(f, "cannot send to self"),
+            Self::ZeroAmount => write!(f, "amount must be greater than zero"),
+            Self::InsufficientKek => write!(f, "insufficient KEK"),
+            Self::InsufficientItem => write!(f, "insufficient item"),
+            Self::Overflow => write!(f, "balance overflow"),
+            Self::ListingExists => write!(f, "listing id already exists"),
+            Self::AlreadyListed => write!(f, "item is already listed"),
+            Self::UnknownListing => write!(f, "unknown listing"),
+            Self::BidNotHigher => write!(f, "bid is not strictly higher"),
+            Self::NotSeller => write!(f, "only the seller can cancel"),
+            Self::NoBid => write!(f, "listing has no bid"),
+            Self::NotOnCharacterLog => write!(f, "event is not valid on a single-character log"),
         }
     }
 }
@@ -70,6 +97,15 @@ impl Engine {
                 }
                 self.state.spawn(*token_id, *starting_job);
             }
+            Input::DepositKek { .. }
+            | Input::ImportItem { .. }
+            | Input::ExportItem { .. }
+            | Input::SendItem { .. }
+            | Input::SendKek { .. }
+            | Input::List { .. }
+            | Input::Bid { .. }
+            | Input::Cancel { .. }
+            | Input::Settle { .. } => return Err(EngineError::NotOnCharacterLog),
         }
         let index = self.chain.len();
         let prev_hash = self.chain.head();
