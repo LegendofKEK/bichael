@@ -953,10 +953,15 @@ textarea {
   transition: opacity 0.1s ease, visibility 0.1s;
   text-align: left;
 }
-.skill-wrap:hover .skill-tip,
-.skill-wrap:focus-within .skill-tip {
+.skill-wrap:hover:not(.tip-dismissed) .skill-tip,
+.skill-wrap:focus-within:not(.tip-dismissed) .skill-tip {
   opacity: 1;
   visibility: visible;
+}
+/* After click/action, keep tip hidden until pointer re-enters (#123). */
+.skill-wrap.tip-dismissed .skill-tip {
+  opacity: 0 !important;
+  visibility: hidden !important;
 }
 .tip-above .skill-tip {
   bottom: calc(100% + 8px);
