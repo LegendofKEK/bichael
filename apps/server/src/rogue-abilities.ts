@@ -7,7 +7,9 @@ import {
   physicalDamage,
   fStr,
   defenseFromVit,
-  GUARD_L1,
+  jobStatsAtLevel,
+  isJobId,
+  type JobId,
 } from "@bellgrave/combat";
 import { ITEM } from "@bellgrave/config";
 import type { AbilityId } from "@bellgrave/protocol";
@@ -48,6 +50,9 @@ export type RogueMob = {
   maxHp: number;
   targetId: string | null;
   falseGuardUntil: number;
+  /** Authored/spawn level — used for defense (Fixes #77). */
+  level: number;
+  job: JobId | string;
 };
 
 export type RogueHooks = {
@@ -225,8 +230,11 @@ export function resolveRogueAbility(
     p.facing = hooks.facingTo(p.x, p.z, m.x, m.z);
     const { str, dex } = hooks.playerCombatStats(p);
     const att = Math.max(1, Math.floor(str + dex * 0.4 + 10));
-    const mobDef = defenseFromVit(GUARD_L1.vit);
-    const dmg = physicalDamage(att, mobDef, fStr(str, GUARD_L1.vit), false);
+    const job: JobId = isJobId(String(m.job)) ? (m.job as JobId) : "fighter";
+    const level = Math.max(1, m.level ?? 1);
+    const mobStats = jobStatsAtLevel(job, level);
+    const mobDef = defenseFromVit(mobStats.vit);
+    const dmg = physicalDamage(att, mobDef, fStr(str, mobStats.vit), false);
     m.hp -= dmg;
     const heal = Math.min(p.maxHp - p.hp, Math.floor(dmg * 0.85));
     p.hp += heal;

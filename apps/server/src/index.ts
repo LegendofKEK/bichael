@@ -3202,7 +3202,10 @@ function tickSim() {
       }
     } else if ((p.anim === "melee" || p.anim === "cast") && now >= p.animUntil) {
       p.anim = "idle";
-    } else if (tick % TICK_HZ === 0) {
+    }
+
+    // Regen / Refresh tick on their own schedule — anim locks must not suppress them (#66).
+    if (p.anim !== "rest" && tick % TICK_HZ === 0) {
       if (now < p.refreshUntil) {
         const tickMp = Math.max(1, p.refreshTick || 4);
         p.mp = Math.min(p.maxMp, p.mp + tickMp);

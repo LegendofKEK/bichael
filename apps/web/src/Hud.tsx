@@ -259,6 +259,7 @@ function SkillButton({
   hotbarIndex?: number;
   onHotbarDrop?: (slotIndex: number, abilityId: CombatAbilityId | null, fromSlot: number | null) => void;
 }) {
+  const wrapRef = useRef<HTMLDivElement>(null);
   const tip = hudAbilityTip(id);
   const until = recasts[id] ?? 0;
   const cdLeftMs = Math.max(0, until - now);
@@ -302,8 +303,22 @@ function SkillButton({
     if (isAbilityId(ability)) onHotbarDrop(hotbarIndex, ability, null);
   };
 
+  const dismissTip = () => {
+    wrapRef.current?.classList.add("tip-dismissed");
+    const ae = document.activeElement;
+    if (ae instanceof HTMLElement) ae.blur();
+  };
+  const clearTipDismiss = () => {
+    wrapRef.current?.classList.remove("tip-dismissed");
+  };
+
   return (
-    <div className={`skill-wrap tip-${tipPlacement}`}>
+    <div
+      ref={wrapRef}
+      className={`skill-wrap tip-${tipPlacement}`}
+      onPointerLeave={clearTipDismiss}
+      onPointerEnter={clearTipDismiss}
+    >
       <button
         type="button"
         draggable={draggable && id !== "rest"}
@@ -319,12 +334,16 @@ function SkillButton({
           .filter(Boolean)
           .join(" ")}
         aria-label={`${tip.title}. ${tip.body}${hotbarIndex != null ? " Drag to rearrange." : ""}`}
-        onClick={() => castAbility(id)}
+        onClick={() => {
+          castAbility(id);
+          dismissTip();
+        }}
         onContextMenu={
           hotbarIndex != null && onHotbarDrop
             ? (e) => {
                 e.preventDefault();
                 onHotbarDrop(hotbarIndex, null, -1); // -1 = clear
+                dismissTip();
               }
             : undefined
         }
@@ -468,12 +487,28 @@ function EmptyHotbarSlot({
   slotIndex: number;
   onHotbarDrop: (slotIndex: number, abilityId: CombatAbilityId | null, fromSlot: number | null) => void;
 }) {
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const dismissTip = () => {
+    wrapRef.current?.classList.add("tip-dismissed");
+    const ae = document.activeElement;
+    if (ae instanceof HTMLElement) ae.blur();
+  };
+  const clearTipDismiss = () => {
+    wrapRef.current?.classList.remove("tip-dismissed");
+  };
+
   return (
-    <div className="skill-wrap tip-above">
+    <div
+      ref={wrapRef}
+      className="skill-wrap tip-above"
+      onPointerLeave={clearTipDismiss}
+      onPointerEnter={clearTipDismiss}
+    >
       <button
         type="button"
         className="skill-slot hotbar-slot empty"
         aria-label={`Empty hotbar slot ${keyLabel}. Drop an ability here.`}
+        onClick={dismissTip}
         onDragOver={(e) => {
           e.preventDefault();
           e.dataTransfer.dropEffect = e.dataTransfer.types.includes(HOTBAR_SLOT_MIME) ? "move" : "copy";
@@ -486,9 +521,11 @@ function EmptyHotbarSlot({
           const ability = e.dataTransfer.getData(HOTBAR_DRAG_MIME);
           if (fromSlot != null && !Number.isNaN(fromSlot)) {
             onHotbarDrop(slotIndex, null, fromSlot);
+            dismissTip();
             return;
           }
           if (isAbilityId(ability)) onHotbarDrop(slotIndex, ability, null);
+          dismissTip();
         }}
       >
         <span className="skill-key">{keyLabel}</span>
@@ -1010,12 +1047,20 @@ export function Hud() {
                 <div className="skill-slot empty" style={{ visibility: "hidden" }} />
               </div>
             )}
-            <div className="skill-wrap tip-above">
+            <div
+              className="skill-wrap tip-above"
+              onPointerLeave={(e) => e.currentTarget.classList.remove("tip-dismissed")}
+              onPointerEnter={(e) => e.currentTarget.classList.remove("tip-dismissed")}
+            >
               <button
                 type="button"
                 className="skill-slot potion"
                 aria-label="Potion. Restore HP. Key Q."
-                onClick={() => send({ type: "item/use", tokenId: ITEM.POTION })}
+                onClick={(e) => {
+                  send({ type: "item/use", tokenId: ITEM.POTION });
+                  e.currentTarget.closest(".skill-wrap")?.classList.add("tip-dismissed");
+                  e.currentTarget.blur();
+                }}
               >
                   <span className="skill-key">Q</span>
                   <AbilityIcon id="potion" />
