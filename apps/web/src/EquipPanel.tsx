@@ -9,7 +9,6 @@ import {
   xpToNextLevel,
   type AttrKey,
 } from "@bellgrave/combat";
-import { ITEM } from "@bellgrave/config";
 import {
   aggregateEquipmentStats,
   getItem,
@@ -378,11 +377,11 @@ function bagItemActions(tokenId: number, you: SnapshotMessage["you"]) {
       onClick: () => send({ type: "equip", slot, tokenId: equipped ? null : tokenId }),
     });
   }
-  if (tokenId === ITEM.POTION) {
+  if (def?.kind === "consumable" && def.consume) {
     btns.push({
-      key: "potion",
+      key: "use",
       label: "Use",
-      onClick: () => send({ type: "item/use", tokenId: ITEM.POTION }),
+      onClick: () => send({ type: "item/use", tokenId }),
     });
   }
   if (!btns.length) return null;

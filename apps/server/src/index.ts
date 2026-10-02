@@ -1980,7 +1980,9 @@ function playerPhysDtMul(p: Player, now: number): number {
   if (now < p.guardianUntil) mul *= 0.65;
   if (now < p.protectUntil) mul *= p.protectPhysMul;
   if (now < p.phalanxUntil) mul *= p.phalanxPhysMul;
-  return Math.max(0.5, mul * Math.max(0.7, tree));
+  // Soft floor so Sentinel + Protect/Rampart/Guardian still stack (#49).
+  // Was hard-capped at 0.5 which made further mitigation a no-op.
+  return Math.max(0.15, mul * Math.max(0.7, tree));
 }
 
 /** Mana Wall — pay remaining damage with MP instead of HP. */
@@ -2534,18 +2536,61 @@ function handleEquip(p: Player, slot: EquipSlot, tokenId: number | null) {
 }
 
 function handleUseItem(p: Player, tokenId: number) {
-  if (tokenId !== ITEM.POTION) {
-    pushLog(p, "Only potions are usable in MVP.");
+  const def = getItem(tokenId);
+  const consume = def?.consume;
+  if (!def || def.kind !== "consumable" || !consume) {
+    pushLog(p, "That item cannot be used.");
     return;
   }
-  if (!takeItem(p.inventory, ITEM.POTION, 1)) {
-    pushLog(p, "No potions left.");
+  const hasEffect =
+    (consume.hp ?? 0) > 0 ||
+    (consume.mp ?? 0) > 0 ||
+    !!consume.statusClear ||
+    (consume.foodDurationSec ?? 0) > 0;
+  if (!hasEffect) {
+    pushLog(p, `${def.name} has no usable effect.`);
     return;
   }
-  // Mock-chain burn: inventory removal IS the burn for MVP
-  const heal = getItem(ITEM.POTION)?.consume?.hp ?? 60;
-  p.hp = Math.min(p.maxHp, p.hp + heal);
-  pushLog(p, `Potion burned on-chain (mock). Restored ${heal} HP.`);
+  // Scrolls need a cast pipeline; reject until wired.
+  if (
+    consume.scrollSpellId &&
+    !(consume.hp || consume.mp || consume.statusClear || consume.foodDurationSec)
+  ) {
+    pushLog(p, "Scrolls are not usable yet.");
+    return;
+  }
+  if (!takeItem(p.inventory, tokenId, 1)) {
+    pushLog(p, `No ${def.name} left.`);
+    return;
+  }
+  const parts: string[] = [];
+  if (consume.hp && consume.hp > 0) {
+    p.hp = Math.min(p.maxHp, p.hp + consume.hp);
+    parts.push(`+${consume.hp} HP`);
+  }
+  if (consume.mp && consume.mp > 0) {
+    p.mp = Math.min(p.maxMp, p.mp + consume.mp);
+    parts.push(`+${consume.mp} MP`);
+  }
+  if (consume.statusClear) {
+    // Clear common player ailment timers when catalog asks for a status wipe.
+    const key = consume.statusClear.toLowerCase();
+    const now = Date.now();
+    if (key === "all" || key === "poison" || key === "ailments") {
+      p.slowUntil = Math.min(p.slowUntil, now);
+      p.blindUntil = Math.min(p.blindUntil, now);
+      if (p.movePct < 0) p.moveUntil = Math.min(p.moveUntil, now);
+    }
+    parts.push("cleared ailments");
+  }
+  if (consume.foodDurationSec && consume.foodDurationSec > 0) {
+    // Food buff stats are not simulated yet; still spend the item + any hp/mp.
+    parts.push(`meal (${consume.foodDurationSec}s)`);
+  }
+  pushLog(
+    p,
+    parts.length ? `Used ${def.name}: ${parts.join(", ")}.` : `Used ${def.name}.`,
+  );
 }
 
 function playerHastePct(p: Player, now: number): number {

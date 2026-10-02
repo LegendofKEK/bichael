@@ -81,10 +81,30 @@ export const useGame = create<GameState>((set, get) => ({
     const me = w
       ? snapshot.units.find((u) => u.id.toLowerCase() === w && u.kind === "player")
       : undefined;
+    // Keep local UI selection (ally heals/buffs) across ticks (#70).
+    // Snapshots previously stomped selectedTarget with server combat targetId every tick.
+    const prevSelected = get().selectedTarget;
+    const stillValid =
+      !!prevSelected && snapshot.units.some((u) => u.id === prevSelected);
+    const serverTarget = me?.targetId ?? null;
+    const serverTargetChanged =
+      !!prev &&
+      !!me &&
+      (prev.units.find((u) => u.id.toLowerCase() === w && u.kind === "player")?.targetId ??
+        null) !== serverTarget;
+    let selectedTarget: string | null;
+    if (serverTargetChanged && serverTarget) {
+      // Player engaged a new mob (or server cleared/retargeted combat) — follow it.
+      selectedTarget = serverTarget;
+    } else if (stillValid) {
+      selectedTarget = prevSelected;
+    } else {
+      selectedTarget = serverTarget;
+    }
     set({
       snapshot,
       logs: snapshot.log ?? prev?.log ?? get().logs,
-      selectedTarget: me?.targetId ?? null,
+      selectedTarget,
     });
   },
   pushLog: (message) =>
