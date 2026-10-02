@@ -61,7 +61,7 @@ ruleset and waits out the timelock; the rotator service calls `checkpoint.addSig
 
 ## Off-chain compatibility
 `test/golden/verify.mjs` (viem) recomputes the checkpoint body hash, EIP-712 digest, genesis root and both item ids, and
-must match `test/Golden.t.sol`. The Rust engine should be tested against the same vectors.
+must match `test/Golden.t.sol`. The Rust engine crate is `engine/` (`lok-engine`). `cargo test` there fails if the genesis root, item ids, or checkpoint body hash drift from these vectors.
 
 ## Known limits (MVP)
 - Single active signer; threshold (k-of-n) signing, fraud proofs and the challenge window are not built. `checkpointedAt`

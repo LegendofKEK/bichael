@@ -1,0 +1,131 @@
+//! Sorted character state and its Merkle commitment.
+
+use std::collections::BTreeMap;
+
+use crate::abi::{keccak256, Buf};
+use crate::u256::U256;
+
+/// Map keys. Declaration order is the `BTreeMap` order for the scalar fields.
+/// `Item` sorts last, then by item id. No input in this slice writes `Item` or credits `Kek`.
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub enum Key {
+    TokenId,
+    Level,
+    Job,
+    Subjob,
+    JobXp,
+    SubjobXp,
+    Location,
+    UnspentPoints,
+    Kek,
+    Item(U256),
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct State {
+    map: BTreeMap<Key, U256>,
+}
+
+impl State {
+    pub fn new() -> Self {
+        Self { map: BTreeMap::new() }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.map.is_empty()
+    }
+
+    pub fn get(&self, key: &Key) -> U256 {
+        self.map.get(key).copied().unwrap_or(U256::ZERO)
+    }
+
+    pub(crate) fn spawn(&mut self, token_id: U256, starting_job: u8) {
+        self.map.insert(Key::TokenId, token_id);
+        self.map.insert(Key::Level, U256::from_u64(1));
+        self.map.insert(Key::Job, U256::from_u64(u64::from(starting_job)));
+        self.map.insert(Key::Subjob, U256::ZERO);
+        self.map.insert(Key::JobXp, U256::ZERO);
+        self.map.insert(Key::SubjobXp, U256::ZERO);
+        self.map.insert(Key::Location, U256::ZERO);
+        self.map.insert(Key::UnspentPoints, U256::ZERO);
+        // Deposit-only. Spawn does not grant KEK.
+        self.map.insert(Key::Kek, U256::ZERO);
+    }
+
+    /// Bit layout from `CharacterCheckpoint.summary`.
+    pub fn summary(&self) -> U256 {
+        let level = self.get(&Key::Level).mask_low(16);
+        let job = self.get(&Key::Job).mask_low(8).shl(16);
+        let subjob = self.get(&Key::Subjob).mask_low(8).shl(24);
+        let job_xp = self.get(&Key::JobXp).mask_low(32).shl(32);
+        let subjob_xp = self.get(&Key::SubjobXp).mask_low(32).shl(64);
+        let location = self.get(&Key::Location).mask_low(16).shl(96);
+        let unspent = self.get(&Key::UnspentPoints).mask_low(16).shl(112);
+        level
+            .bitor(job)
+            .bitor(subjob)
+            .bitor(job_xp)
+            .bitor(subjob_xp)
+            .bitor(location)
+            .bitor(unspent)
+    }
+
+    pub fn root(&self) -> [u8; 32] {
+        commit_map(&self.map)
+    }
+}
+
+fn key_tag(key: &Key) -> u8 {
+    match key {
+        Key::TokenId => 0,
+        Key::Level => 1,
+        Key::Job => 2,
+        Key::Subjob => 3,
+        Key::JobXp => 4,
+        Key::SubjobXp => 5,
+        Key::Location => 6,
+        Key::UnspentPoints => 7,
+        Key::Kek => 8,
+        Key::Item(_) => 9,
+    }
+}
+
+fn leaf(key: &Key, value: &U256) -> [u8; 32] {
+    let key_data = match key {
+        Key::Item(id) => *id,
+        _ => U256::ZERO,
+    };
+    let mut buf = Buf::new();
+    buf.u8(key_tag(key));
+    buf.u256(&key_data);
+    buf.u256(value);
+    keccak256(&buf.bytes)
+}
+
+fn commit_map(map: &BTreeMap<Key, U256>) -> [u8; 32] {
+    let mut level: Vec<[u8; 32]> = map.iter().map(|(k, v)| leaf(k, v)).collect();
+    if level.is_empty() {
+        return keccak256(&[]);
+    }
+    while level.len() > 1 {
+        if level.len() % 2 == 1 {
+            let last = *level.last().expect("odd level has a last leaf");
+            level.push(last);
+        }
+        let mut next = Vec::with_capacity(level.len() / 2);
+        for pair in level.chunks(2) {
+            let mut raw = [0u8; 64];
+            raw[..32].copy_from_slice(&pair[0]);
+            raw[32..].copy_from_slice(&pair[1]);
+            next.push(keccak256(&raw));
+        }
+        level = next;
+    }
+    level[0]
+}
+
+/// Commitment of an arbitrary set of entries. Duplicate keys: the last one wins.
+/// Order of `entries` does not matter.
+pub fn commit_entries(entries: impl IntoIterator<Item = (Key, U256)>) -> [u8; 32] {
+    commit_map(&entries.into_iter().collect())
+}
