@@ -36,6 +36,8 @@ Potion use removes inventory (mock on-chain burn). Real ERC-4337 / Robinhood Cha
 
 See `contracts/README.md`. MVP does not deploy; inventory is server-authoritative mock state.
 
+The log-model Foundry package lives in `contracts/lok-log/` (not part of the pnpm workspace).
+
 ## License
 
 This project is licensed under the GNU General Public License v3.0. See the [LICENSE](LICENSE) file for details.

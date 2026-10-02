@@ -1,0 +1,9 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.24;
+
+interface IKekVault {
+    /// Pull `amount` KEK from `from` into custody. BRIDGE_ROLE only (CharacterCheckpoint).
+    function deposit(address from, uint256 tokenId, uint256 amount) external;
+    /// Queue a delayed withdrawal for a checkpoint-attested KEK balance decrease. BRIDGE_ROLE only.
+    function queueWithdrawal(address to, uint256 tokenId, uint256 amount) external returns (uint256 id);
+}

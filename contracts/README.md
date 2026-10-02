@@ -11,3 +11,7 @@ Planned V1 surface (Robinhood Chain, ERC-4337):
 | `BellgraveMarketplace` | Escrow buy/sell (equip stays offchain) |
 
 Do not implement here until Alchemy/AA keys and chain RPC are wired in `apps/web`.
+
+## lok-log (Foundry)
+
+The event-sourced character log (checkpoints, rulesets, KEK vault) is in `contracts/lok-log/`. It is a standalone Foundry package, not part of the pnpm workspace, and the game packages do not compile it. Locked product decisions are in `contracts/lok-log/CONTRACTS.md`.
