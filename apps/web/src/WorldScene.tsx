@@ -38,6 +38,7 @@ import { UnitStatusIcons } from "./UnitStatusIcons";
 import { QuarksVfxLayer, spawnVfx } from "./vfx";
 import { WorldPostFx } from "./worldPostFx";
 import { worldHtmlPortalRef } from "./worldHtml";
+import { NpcInteractMenu } from "./NpcInteractMenu";
 
 const QUICKEN_ORBS_PER_BELT = 3;
 const QUICKEN_BELT_COUNT = 2;
@@ -2748,6 +2749,25 @@ function WasdController() {
   return null;
 }
 
+
+function NpcWorldMenu({ npcId }: { npcId: string }) {
+  const open = useGame((s) => s.npcDialog?.npcId === npcId);
+  if (!open) return null;
+  // Anchor at feet; CSS/transform drops the card just under the sprite.
+  return (
+    <Html
+      position={[0, 0.02, 0]}
+      center={false}
+      portal={worldHtmlPortalRef}
+      zIndexRange={[60, 50]}
+      style={{ pointerEvents: "auto", transform: "translate(-50%, 0)" }}
+      distanceFactor={11}
+    >
+      <NpcInteractMenu />
+    </Html>
+  );
+}
+
 function HallNpc({ unitId }: { unitId: string }) {
   const sig = useGame((s) => {
     const u = s.snapshot?.units.find((x) => x.id === unitId);
@@ -2803,6 +2823,7 @@ function HallNpcCapsule({ unit }: { unit: UnitSnapshot }) {
           {unit.name}
         </div>
       </Html>
+      <NpcWorldMenu npcId={unit.id} />
     </group>
   );
 }
@@ -2901,6 +2922,7 @@ function HallNpcSprite({ unit, spriteUrl }: { unit: UnitSnapshot; spriteUrl: str
           </div>
         </Html>
       </group>
+      <NpcWorldMenu npcId={unit.id} />
     </group>
   );
 }

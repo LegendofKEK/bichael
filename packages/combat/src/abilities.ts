@@ -700,6 +700,38 @@ export function abilityIdsForJob(job: JobId): AbilityId[] {
   return [];
 }
 
+/** Highest level cap that may buy this ability for current main/support. */
+export function maxTrainLevelForAbility(
+  main: JobId,
+  mainLevel: number,
+  sub: JobId | null | undefined,
+  subLevel: number,
+  id: AbilityId,
+): number | null {
+  const onMain = abilityIdsForJob(main).includes(id);
+  const onSub = !!(sub && sub !== main && subLevel > 0 && abilityIdsForJob(sub).includes(id));
+  if (!onMain && !onSub) return null;
+  let cap = 0;
+  // Main job: full player level. Support: floor(level/2). Prefer the higher applicable cap.
+  if (onMain) cap = Math.max(cap, Math.max(1, mainLevel));
+  if (onSub) cap = Math.max(cap, Math.max(1, subLevel));
+  return cap;
+}
+
+/** True when Trainer may sell this ability under main/full + support half-level caps. */
+export function canTrainAbility(
+  main: JobId,
+  mainLevel: number,
+  sub: JobId | null | undefined,
+  subLevel: number,
+  id: AbilityId,
+): boolean {
+  if (isTrainerFreeAbility(id)) return false;
+  const cap = maxTrainLevelForAbility(main, mainLevel, sub, subLevel, id);
+  if (cap == null) return false;
+  return abilityUnlockLevel(id) <= cap;
+}
+
 /** Trainer stock for a job at effective level (not free starter, not yet learned). */
 export function jobAbilitiesForSale(
   job: JobId,
@@ -714,19 +746,34 @@ export function jobAbilitiesForSale(
   });
 }
 
-/** Trainer offers for main + support jobs at their effective levels. */
+export type TrainerOffer = {
+  id: AbilityId;
+  label: string;
+  cost: number;
+  unlockLevel: number;
+  /** Which job track this offer is sold under. */
+  track: "main" | "support";
+};
+
+/**
+ * Trainer offers for main + support at effective levels.
+ * Main: up to current player level. Support: up to floor(level/2).
+ * With no support: all main abilities up to current level. Never above those caps.
+ */
 export function trainerOffersForJobs(
   main: JobId,
   mainLevel: number,
   sub: JobId | null | undefined,
   subLevel: number,
   learned: readonly string[],
-): { id: AbilityId; label: string; cost: number; unlockLevel: number }[] {
+): TrainerOffer[] {
   const seen = new Set<string>();
-  const out: { id: AbilityId; label: string; cost: number; unlockLevel: number }[] = [];
-  const add = (job: JobId, level: number) => {
+  const out: TrainerOffer[] = [];
+  const add = (job: JobId, level: number, track: "main" | "support") => {
     for (const id of jobAbilitiesForSale(job, level, learned)) {
       if (seen.has(id)) continue;
+      // Defense in depth: never list an offer above the dual-job train cap.
+      if (!canTrainAbility(main, mainLevel, sub, subLevel, id)) continue;
       seen.add(id);
       const unlockLevel = abilityUnlockLevel(id);
       out.push({
@@ -734,11 +781,12 @@ export function trainerOffersForJobs(
         label: abilityLabel(id),
         cost: trainerAbilityDustCost(unlockLevel),
         unlockLevel,
+        track,
       });
     }
   };
-  add(main, mainLevel);
-  if (sub && sub !== main && subLevel > 0) add(sub, subLevel);
+  add(main, mainLevel, "main");
+  if (sub && sub !== main && subLevel > 0) add(sub, subLevel, "support");
   out.sort((a, b) => a.unlockLevel - b.unlockLevel || a.label.localeCompare(b.label));
   return out;
 }

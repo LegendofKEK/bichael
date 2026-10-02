@@ -12,6 +12,7 @@ import {
   abilityUnlockLevel,
   trainerAbilityDustCost,
   trainerOffersForJobs,
+  canTrainAbility,
   isTrainerFreeAbility,
   aggregateSkillBonuses,
   attackFromStats,
@@ -61,6 +62,7 @@ import {
   MELEE_RANGE,
   MOB_DEATH_FADE_MS,
   MOB_RESPAWN_MS,
+  PH_HUB,
   PH_HUB_NPCS,
   PH_STORAGE_CHEST,
   PH_HUB_SPAWN,
@@ -429,6 +431,19 @@ const TRAINER = {
 } as const;
 
 const NPC_INTERACT_RANGE = 3.5;
+
+
+/** Town hub pad (hub_indoor) — interact from anywhere in the same room. */
+function inHubRoom(x: number, z: number): boolean {
+  return x >= PH_HUB.minX && x <= PH_HUB.maxX && z >= PH_HUB.minZ && z <= PH_HUB.maxZ;
+}
+
+/** Town NPCs: same hub room OR legacy proximity. Field NPCs keep proximity. */
+function canReachTownNpc(px: number, pz: number, nx: number, nz: number): boolean {
+  if (inHubRoom(px, pz) && inHubRoom(nx, nz)) return true;
+  return dist(px, pz, nx, nz) <= NPC_INTERACT_RANGE;
+}
+
 
 function emptyCombatFields() {
   return {
@@ -2124,9 +2139,8 @@ function handleAbility(p: Player, id: AbilityId, targetId?: string) {
 function handleNpcInteract(p: Player, npcId: string) {
   // Party storage chest — stub until bank/storage inventory ships.
   if (npcId === PH_STORAGE_CHEST.id) {
-    const d = dist(p.x, p.z, PH_STORAGE_CHEST.x, PH_STORAGE_CHEST.z);
-    if (d > NPC_INTERACT_RANGE) {
-      pushLog(p, "Step closer to the storage chest.");
+    if (!canReachTownNpc(p.x, p.z, PH_STORAGE_CHEST.x, PH_STORAGE_CHEST.z)) {
+      pushLog(p, "Enter the camp to use the storage chest.");
       return;
     }
     p.facing = facingTo(p.x, p.z, PH_STORAGE_CHEST.x, PH_STORAGE_CHEST.z);
@@ -2135,9 +2149,8 @@ function handleNpcInteract(p: Player, npcId: string) {
   }
 
   if (npcId === JOB_MASTER.id) {
-    const d = dist(p.x, p.z, JOB_MASTER.x, JOB_MASTER.z);
-    if (d > NPC_INTERACT_RANGE) {
-      pushLog(p, "Step closer to the Job Master.");
+    if (!canReachTownNpc(p.x, p.z, JOB_MASTER.x, JOB_MASTER.z)) {
+      pushLog(p, "Enter the camp to speak with the Job Master.");
       return;
     }
     p.facing = facingTo(p.x, p.z, JOB_MASTER.x, JOB_MASTER.z);
@@ -2158,9 +2171,8 @@ function handleNpcInteract(p: Player, npcId: string) {
   }
 
   if (npcId === TRAINER.id) {
-    const d = dist(p.x, p.z, TRAINER.x, TRAINER.z);
-    if (d > NPC_INTERACT_RANGE) {
-      pushLog(p, "Step closer to the Trainer.");
+    if (!canReachTownNpc(p.x, p.z, TRAINER.x, TRAINER.z)) {
+      pushLog(p, "Enter the camp to speak with the Trainer.");
       return;
     }
     p.facing = facingTo(p.x, p.z, TRAINER.x, TRAINER.z);
@@ -2168,13 +2180,13 @@ function handleNpcInteract(p: Player, npcId: string) {
       p.subjob && p.level >= SUBJOB_UNLOCK_LEVEL ? subjobLevel(p.level) : 0;
     const offers = trainerOffersForJobs(p.job, p.level, p.subjob, subLv, p.learned);
     const jobNote = p.subjob
-      ? `${JOBS[p.job].name} L${p.level} + ${JOBS[p.subjob].name} L${subLv}`
-      : `${JOBS[p.job].name} L${p.level}`;
+      ? `${JOBS[p.job].name} L${p.level} (main) + ${JOBS[p.subjob].name} L${subLv} (support half level)`
+      : `${JOBS[p.job].name} L${p.level} (main - all abilities up to your level)`;
     send(p.ws, {
       type: "npc/dialog",
       npcId: TRAINER.id,
       title: "Trainer",
-      body: `Buy job abilities with Dust (${jobNote}). Costs scale 500–10000 by unlock level. Starter kit (Rest + L1 signature) is free.`,
+      body: `Buy job abilities with Dust (${jobNote}). Main: up to your level; support: up to floor(level/2). Costs scale 500-10000 by unlock level. Starter kit (Rest + L1 signature) is free.`,
       spells: offers,
     });
     return;
@@ -2182,9 +2194,8 @@ function handleNpcInteract(p: Player, npcId: string) {
 
   const hub = PH_HUB_NPCS.find((n) => n.id === npcId);
   if (hub) {
-    const d = dist(p.x, p.z, hub.x, hub.z);
-    if (d > NPC_INTERACT_RANGE) {
-      pushLog(p, `Step closer to ${hub.name}.`);
+    if (!canReachTownNpc(p.x, p.z, hub.x, hub.z)) {
+      pushLog(p, `Enter the camp to speak with ${hub.name}.`);
       return;
     }
     p.facing = facingTo(p.x, p.z, hub.x, hub.z);
@@ -2216,8 +2227,7 @@ function handleNpcInteract(p: Player, npcId: string) {
 }
 
 function handleSpellBuy(p: Player, id: AbilityId) {
-  const d = dist(p.x, p.z, TRAINER.x, TRAINER.z);
-  if (d > NPC_INTERACT_RANGE) {
+  if (!canReachTownNpc(p.x, p.z, TRAINER.x, TRAINER.z)) {
     pushLog(p, "You must speak with the Trainer to buy abilities.");
     return;
   }
@@ -2234,10 +2244,13 @@ function handleSpellBuy(p: Player, id: AbilityId) {
     return;
   }
   const unlockLevel = abilityUnlockLevel(id);
-  const okLevel =
-    (onMain && p.level >= unlockLevel) || (onSub && subLv >= unlockLevel);
-  if (!okLevel) {
-    pushLog(p, `${abilityLabel(id)} requires level ${unlockLevel}.`);
+  // Caps: main <= player level; support <= floor(level/2). Never sell above.
+  if (!canTrainAbility(p.job, p.level, p.subjob, subLv, id)) {
+    if (onSub && !onMain) {
+      pushLog(p, `${abilityLabel(id)} requires support level ${unlockLevel} (support is L${subLv}).`);
+    } else {
+      pushLog(p, `${abilityLabel(id)} requires level ${unlockLevel}.`);
+    }
     return;
   }
   if (p.learned.includes(id)) {
@@ -2358,15 +2371,14 @@ function handleDebugMaxLevel(p: Player) {
     );
   }
   send(p.ws, snapshotFor(p));
-  const nearJm = dist(p.x, p.z, JOB_MASTER.x, JOB_MASTER.z) <= NPC_INTERACT_RANGE;
+  const nearJm = canReachTownNpc(p.x, p.z, JOB_MASTER.x, JOB_MASTER.z);
   if (nearJm && p.level >= SUBJOB_UNLOCK_LEVEL) {
     handleNpcInteract(p, JOB_MASTER.id);
   }
 }
 
 function handleJobChange(p: Player, job: JobId) {
-  const d = dist(p.x, p.z, JOB_MASTER.x, JOB_MASTER.z);
-  if (d > NPC_INTERACT_RANGE) {
+  if (!canReachTownNpc(p.x, p.z, JOB_MASTER.x, JOB_MASTER.z)) {
     pushLog(p, "You must speak with the Job Master to change jobs.");
     return;
   }
@@ -2423,8 +2435,7 @@ function handleJobChange(p: Player, job: JobId) {
 }
 
 function handleSubjob(p: Player, job: JobId | null) {
-  const d = dist(p.x, p.z, JOB_MASTER.x, JOB_MASTER.z);
-  if (d > NPC_INTERACT_RANGE) {
+  if (!canReachTownNpc(p.x, p.z, JOB_MASTER.x, JOB_MASTER.z)) {
     pushLog(p, "You must speak with the Job Master to set a support job.");
     return;
   }
@@ -3303,7 +3314,7 @@ function handleGather(p: Player, nodeId: string) {
 
 function handleCraft(p: Player, itemId: number) {
   const crafter = PH_HUB_NPCS.find((n) => n.role === "crafter");
-  if (!crafter || dist(p.x, p.z, crafter.x, crafter.z) > NPC_INTERACT_RANGE) {
+  if (!crafter || !canReachTownNpc(p.x, p.z, crafter.x, crafter.z)) {
     pushLog(p, "You must be near the Craft Master to craft.");
     return;
   }
