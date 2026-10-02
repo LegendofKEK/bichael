@@ -59,43 +59,48 @@ export function NpcInteractMenu() {
 
   const close = () => useGame.getState().setNpcDialog(null);
 
-  // —— Job Master: bare subjob list (no titles / blurbs / main-job chrome) ——
+  // Job Master: Change Alt header + subjob name list (or Lvl 10 gate)
   if (isJobMaster) {
     return (
       <div className="npc-dialog npc-dialog-world npc-dialog-slim">
         <div className="npc-dialog-card npc-dialog-card-slim">
+          <div className="npc-subjob-header">Change Alt</div>
           <div className="npc-subjob-list">
-            {supportJobs.map((job) => {
-              const def = JOBS[job];
-              const current = you?.subjob === job;
-              return (
-                <button
-                  key={`sub-${job}`}
-                  type="button"
-                  className={["npc-subjob-btn", current ? "current" : "", !canSub ? "locked" : ""]
-                    .filter(Boolean)
-                    .join(" ")}
-                  disabled={current || !canSub}
-                  onClick={() => {
-                    send({ type: "job/subjob", job });
-                    close();
-                  }}
-                >
-                  {def.name}
-                </button>
-              );
-            })}
-            {canSub && you?.subjob && (
-              <button
-                type="button"
-                className="npc-subjob-btn npc-subjob-clear"
-                onClick={() => {
-                  send({ type: "job/subjob", job: null });
-                  close();
-                }}
-              >
-                None
-              </button>
+            {canSub ? (
+              <>
+                {supportJobs.map((job) => {
+                  const def = JOBS[job];
+                  const current = you?.subjob === job;
+                  return (
+                    <button
+                      key={`sub-${job}`}
+                      type="button"
+                      className={["npc-subjob-btn", current ? "current" : ""].filter(Boolean).join(" ")}
+                      disabled={current}
+                      onClick={() => {
+                        send({ type: "job/subjob", job });
+                        close();
+                      }}
+                    >
+                      {def.name}
+                    </button>
+                  );
+                })}
+                {you?.subjob && (
+                  <button
+                    type="button"
+                    className="npc-subjob-btn npc-subjob-clear"
+                    onClick={() => {
+                      send({ type: "job/subjob", job: null });
+                      close();
+                    }}
+                  >
+                    None
+                  </button>
+                )}
+              </>
+            ) : (
+              <p className="npc-subjob-gate">Come back at Lvl 10</p>
             )}
           </div>
           <button type="button" className="npc-dialog-x" onClick={close} aria-label="Close">
