@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { LokListingView, LokSnapshot } from "@bellgrave/protocol";
+import { exploreDocument, type LokExplorePage } from "./lok-explore";
 import { defaultWasmPath, loadLokExports, lokCall, lokOut, type LokExports } from "./lok-engine";
 
 export type LokResult = { ok: true } | { ok: false; error: string };
@@ -276,6 +277,20 @@ export class LokWorld {
     if (hits.length > 1) return { ok: false, error: "That name is not unique on the log." };
     if (hits[0]!.tokenId === selfToken) return { ok: false, error: "You cannot send to yourself." };
     return { ok: true, tokenId: hits[0]!.tokenId };
+  }
+
+  /**
+   * Read events already on the log. tokenId null is every character, one row per seq.
+   * A set token is that character's own chain. Nothing is appended.
+   */
+  explore(opts: {
+    tokenId: string | null;
+    q?: string;
+    limit?: number;
+    beforeSeq?: number | null;
+  }): LokExplorePage {
+    const text = existsSync(this.logPath) ? readFileSync(this.logPath, "utf8") : "";
+    return exploreDocument(text, (id) => this.bind.chars.find((c) => c.tokenId === id)?.name ?? id, opts);
   }
 
   view(tokenId: string): LokSnapshot {

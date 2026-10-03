@@ -2,6 +2,8 @@ import type {
   AbilityId,
   CharacterPreview,
   JobId,
+  LokEventView,
+  LokExploreScope,
   SnapshotMessage,
   SpellOffer,
   UnitSnapshot,
@@ -9,6 +11,16 @@ import type {
 import { create } from "zustand";
 
 type Phase = "boot" | "auth" | "create" | "select" | "play";
+
+export type ExplorerView = {
+  scope: LokExploreScope;
+  q: string;
+  beforeSeq?: number;
+  req?: number;
+  events: LokEventView[];
+  total: number;
+  hasMore: boolean;
+};
 
 export type NpcDialog = {
   npcId: string;
@@ -36,6 +48,7 @@ type GameState = {
   logs: string[];
   selectedTarget: string | null;
   npcDialog: NpcDialog | null;
+  explorer: ExplorerView | null;
   setPhase: (p: Phase) => void;
   setWallet: (w: string | null) => void;
   setConnected: (c: boolean) => void;
@@ -49,6 +62,7 @@ type GameState = {
   pushLog: (m: string) => void;
   setSelectedTarget: (id: string | null) => void;
   setNpcDialog: (d: NpcDialog | null) => void;
+  setExplorer: (page: ExplorerView) => void;
   me: () => UnitSnapshot | null;
 };
 
@@ -65,6 +79,7 @@ export const useGame = create<GameState>((set, get) => ({
   logs: [],
   selectedTarget: null,
   npcDialog: null,
+  explorer: null,
   setPhase: (phase) => set({ phase }),
   setWallet: (wallet) => set({ wallet: wallet ? wallet.toLowerCase() : null }),
   setConnected: (connected) => set({ connected }),
@@ -73,7 +88,7 @@ export const useGame = create<GameState>((set, get) => ({
   setSelectedCharId: (selectedCharId) => set({ selectedCharId }),
   setCharacterPreview: (characterPreview) => set({ characterPreview }),
   setPendingCreateEnter: (pendingCreateEnter) => set({ pendingCreateEnter }),
-  clearSnapshot: () => set({ snapshot: null, selectedTarget: null }),
+  clearSnapshot: () => set({ snapshot: null, selectedTarget: null, explorer: null }),
   setSnapshot: (snapshot) => {
     const prev = get().snapshot;
     // Skip identical-tick no-ops (reconnect / duplicate floods).
@@ -112,6 +127,7 @@ export const useGame = create<GameState>((set, get) => ({
     set((s) => ({ logs: [...s.logs.slice(-30), message] })),
   setSelectedTarget: (selectedTarget) => set({ selectedTarget }),
   setNpcDialog: (npcDialog) => set({ npcDialog }),
+  setExplorer: (explorer) => set({ explorer }),
   me: () => {
     const s = get().snapshot;
     const w = get().wallet;

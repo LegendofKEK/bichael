@@ -3140,7 +3140,8 @@ button.equip-stat-label:focus-visible {
 }
 
 /* —— Party panel —— */
-.party-panel {
+.party-panel,
+.explorer-panel {
   pointer-events: auto;
   position: absolute;
   top: 72px;
@@ -3151,6 +3152,9 @@ button.equip-stat-label:focus-visible {
   overflow: auto;
   padding: 16px 16px 18px;
   z-index: 50;
+}
+.explorer-panel {
+  width: 440px;
 }
 .party-invite-banner {
   margin-bottom: 12px;

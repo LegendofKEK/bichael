@@ -22,6 +22,7 @@ import { useEffect, useMemo, useRef, useState, type DragEvent, type FormEvent } 
 import { AbilityIcon } from "./AbilityIcon";
 import { chromaKeyIconUrl } from "./chroma";
 import { CraftingPanel } from "./CraftingPanel";
+import { ExplorerPanel } from "./ExplorerPanel";
 import { LokPanel } from "./LokPanel";
 import { PartyPanel } from "./PartyPanel";
 import { EquipPanel } from "./EquipPanel";
@@ -563,6 +564,7 @@ export function Hud() {
   const [treeOpen, setTreeOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [partyOpen, setPartyOpen] = useState(false);
+  const [explorerOpen, setExplorerOpen] = useState(false);
   const [uiSettings, setUiSettings] = useState<UiSettings>(() => loadUiSettings());
   const [menuFocus, setMenuFocus] = useState<string>("character");
   const [bookTab, setBookTab] = useState<string>("time");
@@ -832,6 +834,19 @@ export function Hud() {
           <button
             type="button"
             role="menuitem"
+            className={`hud-cmd-btn${menuFocus === "explorer" ? " selected" : ""}`}
+            onMouseEnter={() => setMenuFocus("explorer")}
+            onFocus={() => setMenuFocus("explorer")}
+            onClick={() => {
+              setMenuFocus("explorer");
+              setExplorerOpen((v) => !v);
+            }}
+          >
+            Explorer
+          </button>
+          <button
+            type="button"
+            role="menuitem"
             className={`hud-cmd-btn${menuFocus === "settings" ? " selected" : ""}`}
             onMouseEnter={() => setMenuFocus("settings")}
             onFocus={() => setMenuFocus("settings")}
@@ -881,6 +896,7 @@ export function Hud() {
           </button>
         </div>
       )}
+      {explorerOpen && <ExplorerPanel onClose={() => setExplorerOpen(false)} />}
       {partyOpen && wallet && (
         <PartyPanel
           party={snapshot?.party ?? null}

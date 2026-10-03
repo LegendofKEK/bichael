@@ -117,6 +117,14 @@ export const ClientMessageSchema = z.discriminatedUnion("type", [
     type: z.literal("lok/settle"),
     listingId: z.string().regex(/^[1-9][0-9]{0,18}$/),
   }),
+  /** Read-only page of lok events. Does not append. */
+  z.object({
+    type: z.literal("lok/explore"),
+    scope: z.enum(["yours", "everyone"]),
+    q: z.string().max(80).optional(),
+    beforeSeq: z.number().int().nonnegative().optional(),
+    req: z.number().int().nonnegative().optional(),
+  }),
 ]);
 export type ClientMessage = z.infer<typeof ClientMessageSchema>;
 
@@ -310,6 +318,17 @@ export type LokSnapshot = {
   chain: "engine-only" | "rpc-unwatched";
 };
 
+export type LokExploreScope = "yours" | "everyone";
+
+/** One row in the Explorer. Read from the existing character logs. */
+export type LokEventView = {
+  seq: number;
+  hash: string;
+  kind: string;
+  character: string;
+  text: string;
+};
+
 export type SnapshotMessage = {
   type: "snapshot";
   tick: number;
@@ -395,6 +414,16 @@ export type ServerMessage =
   | { type: "log"; message: string }
   | { type: "pong"; t?: number }
   | { type: "party/invite"; fromId: string; fromName: string; partyId: string; expiresAt: number }
+  | {
+      type: "lok/events";
+      scope: LokExploreScope;
+      q: string;
+      beforeSeq?: number;
+      req?: number;
+      events: LokEventView[];
+      total: number;
+      hasMore: boolean;
+    }
   | {
       type: "npc/dialog";
       npcId: string;
