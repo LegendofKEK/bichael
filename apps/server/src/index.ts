@@ -159,6 +159,7 @@ import {
   resolveBattleMageAbility,
 } from "./battlemage-abilities";
 import { playerStance, resolveTimAbility } from "./tim-abilities";
+import { loadLokEnv, startKekDepositWatcher } from "./lok-chain";
 import { defaultLokDir, LokWorld } from "./lok-world";
 import {
   PARTY_INVITE_RANGE,
@@ -417,10 +418,12 @@ let fieldNodes: FieldNode[] = createPaleHollowNodes();
 
 const lok: LokWorld = (() => {
   try {
+    loadLokEnv();
     const world = LokWorld.open(defaultLokDir());
     console.log(
       `[bellgrave] lok log ${world.logPath} entries=${world.length}. ${world.chainNote}`,
     );
+    startKekDepositWatcher(world);
     return world;
   } catch (err) {
     console.error("[bellgrave] lok log failed to open; refusing to start.", err);
