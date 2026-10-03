@@ -162,6 +162,7 @@ impl Engine {
                 self.credit_inbound(*token_id, *nonce, |engine| engine.credit_kek(*token_id, *amount))
             }
             Input::WithdrawKek { token_id, amount } => self.debit_kek(*token_id, *amount),
+            Input::SpendKek { token_id, amount } => self.debit_kek(*token_id, *amount),
             Input::ImportItem { token_id, item_id, amount, nonce } => {
                 self.credit_inbound(*token_id, *nonce, |engine| engine.credit_item(*token_id, *item_id, *amount))
             }

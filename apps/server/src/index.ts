@@ -570,6 +570,27 @@ function handleLokSendKek(p: Player, to: string, amount: string) {
   send(p.ws, snapshotFor(p));
 }
 
+/** Debit spendable log KEK. Fails closed; does not mint. Dust is no longer the spend currency. */
+function spendLogKek(p: Player, amount: number): { ok: true } | { ok: false; error: string } {
+  if (!Number.isSafeInteger(amount) || amount < 0) return { ok: false, error: "Bad KEK cost." };
+  if (amount === 0) return { ok: true };
+  const token = lokToken(p);
+  if (!token) return { ok: false, error: "Could not open your log identity." };
+  const have = lok.kekOf(token);
+  let bal: bigint;
+  let cost: bigint;
+  try {
+    bal = BigInt(have);
+    cost = BigInt(amount);
+  } catch {
+    return { ok: false, error: "Bad KEK balance." };
+  }
+  if (bal < cost) {
+    return { ok: false, error: `Need ${amount} KEK (you have ${have}).` };
+  }
+  return lok.spendKek(token, String(amount));
+}
+
 function handleLokWithdrawKek(p: Player, _amount: string) {
   // Off until a vault withdrawal is actually queued. Calling lok.withdrawKek here
   // debits in-game KEK and tells the client nothing was submitted onchain, which burns KEK.
@@ -2440,7 +2461,7 @@ function handleNpcInteract(p: Player, npcId: string) {
       type: "npc/dialog",
       npcId: TRAINER.id,
       title: "Trainer",
-      body: `Buy job abilities with Dust (${jobNote}). Main: up to your level; support: up to floor(level/2). Costs scale 500-10000 by unlock level. Starter kit (Rest + L1 signature) is free.`,
+      body: `Buy job abilities with deposited KEK (${jobNote}). Main: up to your level; support: up to floor(level/2). Costs scale 500-10000 by unlock level. Starter kit (Rest + L1 signature) is free. Dust is no longer the spend currency.`,
       spells: offers,
     });
     return;
@@ -2513,14 +2534,14 @@ function handleSpellBuy(p: Player, id: AbilityId) {
     return;
   }
   const cost = trainerAbilityDustCost(unlockLevel);
-  if (p.dust < cost) {
-    pushLog(p, `Need ${cost} Dust for ${abilityLabel(id)} (you have ${p.dust}).`);
+  const paid = spendLogKek(p, cost);
+  if (!paid.ok) {
+    pushLog(p, `Need ${cost} KEK for ${abilityLabel(id)}. ${paid.error}`);
     return;
   }
-  p.dust -= cost;
   p.learned.push(id);
   logLokAbility(p, id);
-  pushLog(p, `Learned ${abilityLabel(id)} (-${cost} Dust).`);
+  pushLog(p, `Learned ${abilityLabel(id)} (-${cost} KEK).`);
   send(p.ws, snapshotFor(p));
   handleNpcInteract(p, TRAINER.id);
 }
@@ -3649,6 +3670,12 @@ function handleCraft(p: Player, itemId: number) {
     }
     const need = preview.map((m) => `${m.name} ×${m.qty}`).join(", ");
     pushLog(p, `Need materials: ${need}.`);
+    return;
+  }
+  const kekCost = def.recipe?.kek ?? 0;
+  const paid = spendLogKek(p, kekCost);
+  if (!paid.ok) {
+    pushLog(p, `Need ${kekCost} KEK to craft ${def.name}. ${paid.error}`);
     return;
   }
   for (const mat of mats) {

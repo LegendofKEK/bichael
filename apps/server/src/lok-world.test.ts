@@ -79,6 +79,33 @@ test("auction settle pays the high bid with no fee and replays after restart", (
   assert.equal(again.length, lok.length);
 });
 
+test("spendKek debits spendable KEK, leaves escrow locked, and does not mint", () => {
+  const dir = mkdtempSync(join(tmpdir(), "lok-spend-"));
+  const lok = LokWorld.open(dir, undefined, {});
+  const a = lok.spawn("char-a", "Ada", 0);
+  const b = lok.spawn("char-b", "Bea", 1);
+  assert.equal(a.ok && b.ok, true);
+  if (!a.ok || !b.ok) return;
+  assert.equal(noteImport(lok, a.tokenId, "7", "1", "1").ok, true);
+  assert.equal(noteDeposit(lok, b.tokenId, "10", "1").ok, true);
+  const listed = lok.list(a.tokenId, "7", "1");
+  assert.equal(listed.ok, true);
+  if (!listed.ok || !listed.listingId) return;
+  assert.equal(lok.bid(listed.listingId, b.tokenId, "6").ok, true);
+  assert.equal(lok.kekOf(b.tokenId), "4");
+  const short = lok.spendKek(b.tokenId, "5");
+  assert.equal(short.ok, false);
+  if (!short.ok) assert.match(short.error, /insufficient/i);
+  assert.equal(lok.kekOf(b.tokenId), "4");
+  assert.equal(lok.spendKek(b.tokenId, "4").ok, true);
+  assert.equal(lok.kekOf(b.tokenId), "0");
+  const zero = lok.spendKek(b.tokenId, "0");
+  assert.equal(zero.ok, false);
+  const again = LokWorld.open(dir, undefined, {});
+  assert.equal(again.kekOf(b.tokenId), "0");
+  assert.equal(again.kekOf(a.tokenId), "0");
+});
+
 test("withdrawKek drops spendable balance and a transfer is stored on both logs", () => {
   const dir = mkdtempSync(join(tmpdir(), "lok-withdraw-"));
   const lok = LokWorld.open(dir, undefined, {});

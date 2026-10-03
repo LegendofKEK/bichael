@@ -1,9 +1,10 @@
 /**
  * Trainer (ex-Chronomancer) — paid ability learning.
  *
- * Cost curve (Dust), unlockLevel 1 → 75:
+ * Cost curve, unlockLevel 1 → 75. The number is spent as deposited log KEK.
+ * Dust is no longer the spend currency.
  *   cost = round(500 + (unlockLevel - 1) * (10000 - 500) / (75 - 1))
- *   Lv1 = 500 Dust; Lv75 (top) = 10000 Dust.
+ *   Lv1 = 500 KEK; Lv75 (top) = 10000 KEK.
  *
  * Free starter kit (intentional — not sold): Rest + each job's L1 signature tools.
  * Everything else requires a Trainer purchase and persists on `learned`.
@@ -14,7 +15,7 @@ export const TRAINER_COST_MAX_LEVEL = 75;
 export const TRAINER_COST_MIN = 500;
 export const TRAINER_COST_MAX = 10000;
 
-/** Dust cost to learn an ability at the given unlock level. */
+/** KEK cost to learn an ability at the given unlock level. Dust is no longer the spend currency. */
 export function trainerAbilityDustCost(unlockLevel: number): number {
   const lv = Math.max(1, Math.min(TRAINER_COST_MAX_LEVEL, Math.floor(unlockLevel)));
   if (TRAINER_COST_MAX_LEVEL <= 1) return TRAINER_COST_MIN;

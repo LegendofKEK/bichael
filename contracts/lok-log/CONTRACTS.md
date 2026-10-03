@@ -2,7 +2,7 @@
 
 These decisions are locked for the lok-log package.
 
-- **KEK is deposit-only from Robinhood L2.** It is not earnable in-game. There is no faucet.
+- **KEK is deposit-only from Robinhood L2.** It is not earnable in-game. There is no faucet. Trainer ability prices and craft `recipe.kek` charges spend that deposited balance through `spendKek`. Dust is no longer the spend currency for those prices. `spendKek` does not mint and is not a withdrawal. `lok/withdrawKek` stays disabled. No chain watcher is added.
 - **KEK token (Robinhood L2):** `0x5a3544a0328afD50A9979e03404F35c555B88c00`. Deposit-only. There is no faucet. This is the token a vault would custody. Do not deploy it from this tree.
 - **In-game transfers and the auction house are lok-engine log events, not contracts.** A transfer or bid moves only KEK or items the character already holds. There is no transfer tax and no auction fee. Listing an item escrows it so it cannot be transferred, exported, or listed again until cancel or settle.
 - **Goal:** prove in-game events cheaply with an event-sourced rules engine and a hash-chained log. Items and KEK enter from Robinhood. Items can be minted out as NFTs (exports) and brought back (import).

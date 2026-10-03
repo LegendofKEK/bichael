@@ -111,16 +111,23 @@ export function NpcInteractMenu() {
     );
   }
 
-  // —— Trainer: compact ability cards (icon, name, blurb, Dust) ——
+  // —— Trainer: compact ability cards (icon, name, blurb, KEK) ——
   if (isTrainer) {
+    const kekText = you?.lok?.kek ?? "0";
+    let kekBal = 0n;
+    try {
+      kekBal = BigInt(kekText);
+    } catch {
+      kekBal = 0n;
+    }
     return (
       <div className="npc-dialog npc-dialog-world npc-dialog-slim">
         <div className="npc-dialog-card npc-dialog-card-slim npc-trainer-card-wrap">
-          <div className="npc-trainer-dust">{you?.dust ?? 0} Dust</div>
+          <div className="npc-trainer-dust">{kekText} KEK</div>
           <div className="npc-trainer-cards">
             {spells.length === 0 && <p className="npc-trainer-empty">Nothing available</p>}
             {spells.map((sp) => {
-              const canAfford = (you?.dust ?? 0) >= sp.cost;
+              const canAfford = kekBal >= BigInt(sp.cost);
               const tip = isAbilityId(sp.id) ? hudAbilityTip(sp.id) : null;
               const aid = isAbilityId(sp.id) ? sp.id : null;
               return (
@@ -138,7 +145,7 @@ export function NpcInteractMenu() {
                   <span className="npc-trainer-card-body">
                     <strong className="npc-trainer-card-name">{sp.label}</strong>
                     {tip && <span className="npc-trainer-card-desc">{tip.body}</span>}
-                    <span className="npc-trainer-card-cost">{sp.cost} Dust</span>
+                    <span className="npc-trainer-card-cost">{sp.cost} KEK</span>
                   </span>
                 </button>
               );

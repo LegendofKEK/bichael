@@ -120,6 +120,15 @@ export function CraftingPanel({ you, onClose }: Props) {
         {closeList.map((c) => {
           const pct = Math.round(c.matFrac * 100);
           const groups = c.materialGroups ?? c.materials.map((m) => ({ options: [m] }));
+          const kekCost = c.def.recipe?.kek ?? 0;
+          let kekBal = 0n;
+          try {
+            kekBal = BigInt(you.lok?.kek ?? "0");
+          } catch {
+            kekBal = 0n;
+          }
+          const kekOk = kekCost <= 0 || kekBal >= BigInt(kekCost);
+          const ready = c.canCraft && kekOk;
           return (
             <div key={c.def.id} className="craft-recipe-row">
               <img src={c.def.icon} alt="" width={40} height={40} className="craft-icon" />
@@ -154,17 +163,18 @@ export function CraftingPanel({ you, onClose }: Props) {
                     );
                   })}
                 </div>
+                <div className="craft-mat-line">{kekCost > 0 ? `${kekCost} KEK` : "0 KEK"}</div>
                 <div className="craft-progress">
                   <i style={{ width: `${pct}%` }} />
                 </div>
               </div>
               <button
                 type="button"
-                className={`cmd-mini-btn${c.canCraft ? " on" : ""}`}
-                disabled={!c.canCraft}
+                className={`cmd-mini-btn${ready ? " on" : ""}`}
+                disabled={!ready}
                 onClick={() => send({ type: "craft", itemId: c.def.id })}
               >
-                {c.canCraft ? "Craft" : c.skillLevel < c.needLevel ? `Lv ${c.needLevel}` : `${pct}%`}
+                {ready ? "Craft" : !kekOk ? "KEK" : c.skillLevel < c.needLevel ? `Lv ${c.needLevel}` : `${pct}%`}
               </button>
             </div>
           );

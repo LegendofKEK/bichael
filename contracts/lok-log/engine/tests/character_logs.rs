@@ -130,6 +130,37 @@ fn withdraw_kek_reduces_balance_and_rejects_overspend() {
 }
 
 #[test]
+fn spend_kek_debits_spendable_only_and_is_not_kek_out() {
+    let ore = lok_engine::fungible_id("iron_ore");
+    let mut world = spawn_pair();
+    import_item(&mut world, n(1), ore, n(1)).unwrap();
+    deposit(&mut world, n(2), n(10)).unwrap();
+    world.append_list(n(1), n(1), ore, n(1)).unwrap();
+    world.append_bid(n(1), n(2), n(6)).unwrap();
+    assert_eq!(world.kek_balance(&n(2)), Some(n(4)));
+    assert_eq!(world.append_spend_kek(n(2), n(5)).unwrap_err(), EngineError::InsufficientKek);
+    assert_eq!(world.kek_balance(&n(2)), Some(n(4)), "a short spend does not append");
+    assert_eq!(world.solvency_kek(&n(2)), Some(n(10)), "escrowed bid stays locked");
+    world.append_spend_kek(n(2), n(4)).unwrap();
+    assert_eq!(world.kek_balance(&n(2)), Some(n(0)));
+    assert_eq!(world.solvency_kek(&n(2)), Some(n(6)));
+    let drafted = world.checkpoint_span(&n(2), world.character_len(&n(2)).unwrap()).unwrap();
+    assert_eq!(drafted.kek_out, U256::ZERO, "spend is not a withdrawal");
+    assert_eq!(total_solvency(&world), expected_total(&world));
+
+    let mut engine = Engine::open(n(1), 3);
+    engine.apply(Input::Spawn { token_id: n(1), starting_job: 3 }).unwrap();
+    engine.apply(Input::DepositKek { token_id: n(1), amount: n(5), nonce: 1 }).unwrap();
+    engine.apply(Input::SpendKek { token_id: n(1), amount: n(2) }).unwrap();
+    assert_eq!(engine.state().get(&Key::Kek), n(3));
+    assert_eq!(
+        engine.apply(Input::SpendKek { token_id: n(1), amount: n(4) }).unwrap_err(),
+        EngineError::InsufficientKek
+    );
+    assert_eq!(engine.state().get(&Key::Kek), n(3));
+}
+
+#[test]
 fn escrowed_bid_counts_in_the_solvency_snapshot() {
     let ore = lok_engine::fungible_id("iron_ore");
     let mut world = spawn_pair();
@@ -210,7 +241,11 @@ fn expected_total(w: &World) -> U256 {
             }
             match &e.input {
                 Input::DepositKek { amount, .. } => dep = dep.checked_add(*amount).unwrap(),
-                Input::WithdrawKek { amount, .. } => wd = wd.checked_add(*amount).unwrap(),
+                // SpendKek is a sink of spendable KEK, same as a withdrawal for what remains
+                // on the logs. It is not kekOut.
+                Input::WithdrawKek { amount, .. } | Input::SpendKek { amount, .. } => {
+                    wd = wd.checked_add(*amount).unwrap()
+                }
                 _ => {}
             }
         }

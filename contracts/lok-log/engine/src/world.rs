@@ -6,9 +6,10 @@
 //! that character's uncommitted tail; another character's committed copy of the trade
 //! stays on their chain.
 //!
-//! KEK enters only through `DepositKek` and leaves only through `WithdrawKek`.
-//! Nothing here mints KEK or submits an onchain withdrawal. There is no transfer tax
-//! and no auction fee.
+//! KEK enters only through `DepositKek`. `WithdrawKek` decreases spendable KEK
+//! (the `kekOut` image) and does not submit an onchain withdrawal. `SpendKek`
+//! decreases spendable KEK for an in-game price, is not `kekOut`, and does not mint.
+//! Escrowed bids are not spendable. There is no transfer tax and no auction fee.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -264,6 +265,11 @@ impl World {
         self.apply(Input::WithdrawKek { token_id, amount })
     }
 
+    /// Debit spendable KEK for an in-game price. Not a withdrawal and not a mint.
+    pub fn append_spend_kek(&mut self, token_id: U256, amount: U256) -> Result<AppliedEvent, EngineError> {
+        self.apply(Input::SpendKek { token_id, amount })
+    }
+
     pub fn append_import_item(
         &mut self,
         token_id: U256,
@@ -345,6 +351,8 @@ impl World {
         let log_hash = ch.entries[to_index as usize - 1].hash;
         let mut kek_out = U256::ZERO;
         let mut exports = Vec::new();
+        // SpendKek is an in-game sink. It must not become kekOut, or a checkpoint would
+        // queue a vault withdrawal of KEK the player already spent.
         for entry in &ch.entries[from_index as usize..to_index as usize] {
             match &entry.input {
                 Input::WithdrawKek { token_id: who, amount } if who == token_id => {
@@ -619,7 +627,8 @@ impl World {
                 touch.insert(*token_id);
             }
             Input::DepositKek { token_id, amount, .. }
-            | Input::WithdrawKek { token_id, amount } => {
+            | Input::WithdrawKek { token_id, amount }
+            | Input::SpendKek { token_id, amount } => {
                 if *amount == U256::ZERO {
                     return Err(EngineError::ZeroAmount);
                 }
@@ -771,8 +780,9 @@ impl World {
                 }
                 Ok(())
             }
-            Input::WithdrawKek { token_id, amount } => {
+            Input::WithdrawKek { token_id, amount } | Input::SpendKek { token_id, amount } => {
                 if touch.contains(token_id) {
+                    // Spendable only. Escrowed bids were already removed from this balance.
                     self.debit_kek(*token_id, *amount)?;
                 }
                 Ok(())

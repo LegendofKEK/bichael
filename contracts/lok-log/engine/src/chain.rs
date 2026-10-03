@@ -325,6 +325,10 @@ pub(crate) fn parse_input(value: &serde_json::Value) -> Result<Input, String> {
             token_id: req_u256(value, "tokenId")?,
             amount: req_u256(value, "amount")?,
         }),
+        "spendKek" => Ok(Input::SpendKek {
+            token_id: req_u256(value, "tokenId")?,
+            amount: req_u256(value, "amount")?,
+        }),
         "sendItem" => Ok(Input::SendItem {
             from: req_u256(value, "from")?,
             to: req_u256(value, "to")?,
@@ -434,6 +438,11 @@ pub(crate) fn input_to_json(input: &Input) -> serde_json::Value {
         }),
         Input::WithdrawKek { token_id, amount } => serde_json::json!({
             "type": "withdrawKek",
+            "tokenId": s(token_id),
+            "amount": s(amount),
+        }),
+        Input::SpendKek { token_id, amount } => serde_json::json!({
+            "type": "spendKek",
             "tokenId": s(token_id),
             "amount": s(amount),
         }),
