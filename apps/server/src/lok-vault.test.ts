@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { debitAfterQueue, depositCastArgs, queueKekWithdrawal, type CastFn } from "./lok-vault";
+import { allowPlayerDeposit, debitAfterQueue, depositCastArgs, depositKekOnchain, LOCAL_MOCK_KEK, PLAYER_DEPOSIT_CAP, playerDepositGate, queueKekWithdrawal, type CastFn } from "./lok-vault";
 
 const ENV = {
   LOK_CHAIN_RPC: "http://127.0.0.1:8545",
@@ -117,4 +117,37 @@ test("missing vault config refuses without debiting", async () => {
   });
   assert.equal(res.ok, false);
   assert.equal(called, false);
+});
+
+test("a deposit is rejected when the chain is not 31337 or the token is not mock KEK", async () => {
+  const robin = "0x5a3544a0328afD50A9979e03404F35c555B88c00";
+  assert.equal(playerDepositGate({ chainId: 1n, token: LOCAL_MOCK_KEK, amount: 10n }).ok, false);
+  assert.equal(playerDepositGate({ chainId: 31337n, token: robin, amount: 10n }).ok, false);
+  assert.equal(playerDepositGate({ chainId: 31337n, token: LOCAL_MOCK_KEK, amount: PLAYER_DEPOSIT_CAP + 1n }).ok, false);
+  assert.equal(playerDepositGate({ chainId: 31337n, token: LOCAL_MOCK_KEK, amount: 10n }).ok, true);
+
+  let calls = 0;
+  const badToken = await depositKekOnchain("1", "10", { ...ENV, LOK_KEK: robin }, async () => {
+    calls += 1;
+    return { stdout: "", stderr: "" };
+  });
+  assert.equal(badToken.ok, false);
+  if (!badToken.ok) assert.match(badToken.error, /MockKEK/);
+  assert.equal(calls, 0);
+
+  const cast: CastFn = async (args) => {
+    if (args[0] === "chain-id") return { stdout: "1\n", stderr: "" };
+    calls += 1;
+    throw new Error("unexpected " + args[0]);
+  };
+  const badChain = await depositKekOnchain("chain-gate", "10", { ...ENV, LOK_KEK: LOCAL_MOCK_KEK }, cast);
+  assert.equal(badChain.ok, false);
+  if (!badChain.ok) assert.match(badChain.error, /31337/);
+  assert.equal(calls, 0);
+});
+
+test("player deposits are rate limited per character", () => {
+  assert.equal(allowPlayerDeposit("rate-char", 1_000).ok, true);
+  assert.equal(allowPlayerDeposit("rate-char", 2_000).ok, false);
+  assert.equal(allowPlayerDeposit("rate-char", 11_000).ok, true);
 });
