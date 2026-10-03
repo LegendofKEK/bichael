@@ -38,12 +38,18 @@ export function LokPanel({ you, onClose }: Props) {
     );
   }
 
+  const wait =
+    lok.withdrawDelaySec == null
+      ? "the vault delay"
+      : lok.withdrawDelaySec % 3600 === 0
+        ? lok.withdrawDelaySec / 3600 + " hours"
+        : lok.withdrawDelaySec + " seconds";
   const chainNote =
     lok.chain === "engine-only"
-      ? "KEK is deposit-only from Robinhood L2. No chain endpoint is configured. Withdraw drops the in-game counter only; nothing is submitted onchain."
+      ? "No chain endpoint is configured. Deposit and withdraw are refused, and no in-game KEK is burned."
       : lok.chain === "watching"
-        ? "This server is watching the local vault for KEK deposits. Withdrawals are not sent from the client."
-        : "A chain endpoint is set, but this server is not watching the vault or submitting withdrawals yet.";
+        ? "Deposits move local MockKEK into the vault. A withdrawal is queued for " + wait + " and is not paid out early. Spendable KEK is debited only after the queue exists."
+        : "A chain endpoint is set, but this server is not watching the vault yet. Withdraw does not burn in-game KEK.";
 
   return (
     <div className="cmd-panel lok-panel">
@@ -79,12 +85,31 @@ export function LokPanel({ you, onClose }: Props) {
         </button>
         <button
           type="button"
+          className="boot-primary"
+          onClick={() => send({ type: "lok/deposit", amount: kek })}
+        >
+          Deposit KEK
+        </button>
+        <button
+          type="button"
           className="cmd-pill-tab"
           onClick={() => send({ type: "lok/withdrawKek", amount: kek })}
         >
-          Withdraw KEK
+          Queue withdrawal
         </button>
       </div>
+      <div className="cmd-section-label">Vault queue ? {wait}</div>
+      {lok.queues.length === 0 && <p className="lok-note">No withdrawal is queued.</p>}
+      {lok.queues.map((row) => (
+        <div className="lok-row" key={row.id}>
+          <span>
+            #{row.id} {row.amount} KEK ? claimable {new Date(row.availableAt * 1000).toLocaleString()}
+          </span>
+          <button type="button" className="cmd-pill-tab" onClick={() => send({ type: "lok/claimKek", id: row.id })}>
+            Claim
+          </button>
+        </div>
+      ))}
 
       <div className="cmd-section-label">Bag · import</div>
       {you.inventory.length === 0 && <p className="lok-note">Bag is empty.</p>}

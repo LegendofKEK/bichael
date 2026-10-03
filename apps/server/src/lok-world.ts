@@ -64,7 +64,7 @@ export function chainModeFromEnv(env: NodeJS.ProcessEnv = process.env): {
   if (env.LOK_CHECKPOINT?.trim()) {
     return {
       chain: "watching",
-      note: "Watching the checkpoint for KEK deposits. Client withdrawals stay off; nothing is submitted onchain.",
+      note: "Watching the checkpoint for KEK deposits. A withdrawal queues on the vault and waits out its delay. Spendable KEK is debited only after that queue exists.",
     };
   }
   return {
@@ -285,6 +285,23 @@ export class LokWorld {
     return { ok: true, tokenId: hits[0]!.tokenId };
   }
 
+  nameTaken(name: string): boolean {
+    const key = name.trim().toLowerCase();
+    if (!key) return false;
+    return this.bind.chars.some((c) => c.name.toLowerCase() === key);
+  }
+
+  boundChars(): { charId: string; tokenId: string; name: string; job: number }[] {
+    return this.bind.chars.map((c) => ({ ...c }));
+  }
+
+  setBoundName(charId: string, name: string): void {
+    const row = this.bind.chars.find((c) => c.charId === charId);
+    if (!row || row.name === name) return;
+    row.name = name;
+    this.saveBind();
+  }
+
   /**
    * Read events already on the log. tokenId null is every character, one row per seq.
    * A set token is that character's own chain. Nothing is appended.
@@ -334,6 +351,8 @@ export class LokWorld {
       items,
       listings,
       chain: this.chain,
+      withdrawDelaySec: null,
+      queues: [],
     };
   }
 

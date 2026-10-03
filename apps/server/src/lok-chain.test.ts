@@ -23,7 +23,7 @@ test("chain mode stays engine-only until an rpc is set, and watching needs a che
     LOK_CHECKPOINT: "0x5FC8d32690cc91D4c39d9d3abcBD16989F875707",
   });
   assert.equal(watching.chain, "watching");
-  assert.match(watching.note, /withdrawals stay off/i);
+  assert.match(watching.note, /queues on the vault/i);
 });
 
 test("a vault deposit log credits the character once and a replay does not", () => {
