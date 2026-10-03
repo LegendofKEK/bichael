@@ -219,3 +219,75 @@ test("level, ability, craft, harvest, and drop replay and a bad event does not a
   assert.equal(again.kekOf(a.tokenId), "0");
   assert.equal(again.length, lok.length);
 });
+
+test("explore reads yours or everyone, searches, and pages newest first", () => {
+  const lok = world();
+  assert.deepEqual(lok.explore({ tokenId: null }).events, []);
+  assert.equal(lok.explore({ tokenId: null }).total, 0);
+
+  const a = lok.spawn("char-a", "Ada", 0);
+  const b = lok.spawn("char-b", "Bea", 1);
+  assert.equal(a.ok && b.ok, true);
+  if (!a.ok || !b.ok) return;
+
+  assert.equal(noteImport(lok, a.tokenId, "7", "2", "1").ok, true);
+  assert.equal(noteDeposit(lok, b.tokenId, "9", "1").ok, true);
+  assert.equal(lok.sendKek(b.tokenId, a.tokenId, "4").ok, true);
+  assert.equal(lok.learnAbility(a.tokenId, "fire").ok, true);
+  assert.equal(lok.harvest(b.tokenId, "dustgrain", "13").ok, true);
+  for (const id of ["a0", "a1", "a2", "a3"]) {
+    assert.equal(lok.learnAbility(a.tokenId, id).ok, true);
+  }
+  const beforeReject = lok.explore({ tokenId: a.tokenId }).total;
+  assert.equal(lok.sendKek(a.tokenId, b.tokenId, "99").ok, false);
+  assert.equal(lok.explore({ tokenId: a.tokenId }).total, beforeReject);
+
+  const yours = lok.explore({ tokenId: a.tokenId });
+  assert.ok(yours.events.every((event) => event.text.includes("Ada") || event.character === "Ada" || event.kind === "sendKek"));
+  assert.equal(yours.events.some((event) => event.kind === "harvest"), false);
+  assert.equal(yours.events.some((event) => event.kind === "depositKek"), false);
+  assert.equal(yours.events.filter((event) => event.kind === "sendKek").length, 1);
+  assert.ok(yours.events[0]!.seq >= yours.events[yours.events.length - 1]!.seq);
+  assert.equal(yours.events[0]!.kind, "learnAbility");
+  assert.match(yours.events[0]!.text, /a3/);
+
+  const worldRows = lok.explore({ tokenId: null });
+  assert.equal(worldRows.events.filter((event) => event.kind === "sendKek").length, 1);
+  assert.equal(worldRows.events.some((event) => event.kind === "harvest"), true);
+  assert.equal(worldRows.events.some((event) => event.kind === "depositKek"), true);
+  assert.ok(worldRows.total > yours.total);
+
+  const leather = lok.explore({ tokenId: null, q: "leather" });
+  assert.equal(leather.events.length, 1);
+  assert.equal(leather.events[0]!.kind, "importItem");
+  assert.match(leather.events[0]!.text, /Leather Vest/);
+
+  const byKind = lok.explore({ tokenId: a.tokenId, q: "SENDKEK" });
+  assert.equal(byKind.events.length, 1);
+  assert.match(byKind.events[0]!.text, /Bea/);
+  assert.match(byKind.events[0]!.text, /Ada/);
+
+  const byAbility = lok.explore({ tokenId: a.tokenId, q: "fire" });
+  assert.equal(byAbility.events.length, 1);
+  assert.equal(byAbility.events[0]!.kind, "learnAbility");
+
+  const byAmount = lok.explore({ tokenId: null, q: "13" });
+  assert.equal(byAmount.events.length, 1);
+  assert.equal(byAmount.events[0]!.kind, "harvest");
+  assert.match(byAmount.events[0]!.text, /Bea/);
+
+  const none = lok.explore({ tokenId: null, q: "not-a-real-event" });
+  assert.deepEqual(none.events, []);
+  assert.equal(none.total, 0);
+  assert.equal(none.hasMore, false);
+
+  const page = lok.explore({ tokenId: a.tokenId, limit: 2 });
+  assert.equal(page.events.length, 2);
+  assert.equal(page.hasMore, true);
+  assert.ok(page.total > 2);
+  const older = lok.explore({ tokenId: a.tokenId, limit: 2, beforeSeq: page.events[1]!.seq });
+  assert.equal(older.events.length, 2);
+  assert.ok(older.events.every((event) => event.seq < page.events[1]!.seq));
+  const seen = new Set(page.events.map((event) => event.seq));
+  assert.ok(older.events.every((event) => !seen.has(event.seq)));
+});

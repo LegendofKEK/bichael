@@ -649,6 +649,39 @@ function handleLokCancel(p: Player, listingId: string) {
   send(p.ws, snapshotFor(p));
 }
 
+function handleLokExplore(
+  p: Player,
+  scope: "yours" | "everyone",
+  q: string | undefined,
+  beforeSeq: number | undefined,
+  req: number | undefined,
+) {
+  const query = (q ?? "").trim();
+  const token = scope === "yours" ? lok.tokenFor(p.charId) : null;
+  const reply = (events: { seq: number; hash: string; kind: string; character: string; text: string }[], total: number, hasMore: boolean) => {
+    send(p.ws, {
+      type: "lok/events",
+      scope,
+      q: query,
+      ...(beforeSeq != null ? { beforeSeq } : {}),
+      ...(req != null ? { req } : {}),
+      events,
+      total,
+      hasMore,
+    });
+  };
+  if (scope === "yours" && !token) {
+    reply([], 0, false);
+    return;
+  }
+  const page = lok.explore({
+    tokenId: scope === "yours" ? token : null,
+    q: query,
+    beforeSeq: beforeSeq ?? null,
+  });
+  reply(page.events, page.total, page.hasMore);
+}
+
 function handleLokSettle(p: Player, listingId: string) {
   const token = lokToken(p);
   if (!token) {
@@ -3909,6 +3942,9 @@ function onMessage(ws: WebSocket, data: string) {
       break;
     case "lok/settle":
       handleLokSettle(p, msg.listingId);
+      break;
+    case "lok/explore":
+      handleLokExplore(p, msg.scope, msg.q, msg.beforeSeq, msg.req);
       break;
     default:
       break;
