@@ -138,10 +138,25 @@ fn state_body(world: &World) -> serde_json::Map<String, Value> {
                 })
             })
             .collect();
+        let abilities: Vec<Value> = world.abilities_of(&snap.token_id).into_iter().map(Value::String).collect();
+        let crafts: Vec<Value> = world
+            .crafts_of(&snap.token_id)
+            .into_iter()
+            .map(|(item_id, amount)| json!({"itemId": item_id.to_dec(), "amount": amount.to_dec()}))
+            .collect();
+        let harvests: Vec<Value> = world
+            .harvests_of(&snap.token_id)
+            .into_iter()
+            .map(|(material_id, amount)| json!({"materialId": material_id, "amount": amount.to_dec()}))
+            .collect();
         characters.push(json!({
             "tokenId": snap.token_id.to_dec(),
             "kek": snap.kek.to_dec(),
             "solvencyKek": snap.solvency_kek.to_dec(),
+            "level": world.level(&snap.token_id).unwrap_or(0),
+            "abilities": abilities,
+            "crafts": crafts,
+            "harvests": harvests,
             "logLen": self_log_len(world, &snap.token_id),
             "logHead": hex32(&world.character_head(&snap.token_id).unwrap_or([0u8; 32])),
             "items": items,

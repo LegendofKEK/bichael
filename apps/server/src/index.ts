@@ -436,6 +436,55 @@ function lokToken(p: Player): string {
   return res.ok ? res.tokenId : "";
 }
 
+function logLokAbility(p: Player, abilityId: string) {
+  const token = lokToken(p);
+  if (!token || !abilityId) return;
+  const res = lok.learnAbility(token, abilityId);
+  if (!res.ok && !/already known/i.test(res.error)) {
+    pushLog(p, "Ability was not written to your log: " + res.error);
+  }
+}
+
+function syncLokLevel(p: Player) {
+  const token = lokToken(p);
+  if (!token) return;
+  let logged = lok.levelOf(token);
+  if (logged <= 0) return;
+  while (logged < p.level) {
+    const next = logged + 1;
+    const res = lok.levelUp(token, next);
+    if (!res.ok) {
+      pushLog(p, "Level was not written to your log: " + res.error);
+      return;
+    }
+    logged = next;
+  }
+}
+
+function logLokDrop(p: Player, itemId: number, amount: number) {
+  if (!Number.isInteger(itemId) || itemId <= 0 || amount <= 0) return;
+  const token = lokToken(p);
+  if (!token) return;
+  const res = lok.itemDrop(token, String(itemId), String(amount));
+  if (!res.ok) pushLog(p, "Loot was not written to your log: " + res.error);
+}
+
+function logLokCraft(p: Player, itemId: number, amount: number) {
+  if (!Number.isInteger(itemId) || itemId <= 0 || amount <= 0) return;
+  const token = lokToken(p);
+  if (!token) return;
+  const res = lok.craft(token, String(itemId), String(amount));
+  if (!res.ok) pushLog(p, "Craft was not written to your log: " + res.error);
+}
+
+function logLokHarvest(p: Player, materialId: string, amount: number) {
+  if (!materialId || amount <= 0) return;
+  const token = lokToken(p);
+  if (!token) return;
+  const res = lok.harvest(token, materialId, String(amount));
+  if (!res.ok) pushLog(p, "Gather was not written to your log: " + res.error);
+}
+
 function itemLabel(tokenId: number): string {
   return getItem(tokenId)?.name ?? "item " + tokenId;
 }
@@ -1890,6 +1939,7 @@ function createPlayer(
   registerAccountChar(p);
   players.set(wallet, p);
   walletToPlayer.set(wallet, wallet);
+  for (const abilityId of p.skillUnlocked) logLokAbility(p, abilityId);
   return p;
 }
 
@@ -1963,7 +2013,10 @@ function ensureJobHubs(p: Player) {
   const need = [skillHubForJob(p.job)];
   if (p.subjob && p.subjob !== p.job) need.push(skillHubForJob(p.subjob));
   for (const hub of need) {
-    if (!p.skillUnlocked.includes(hub)) p.skillUnlocked.push(hub);
+    if (!p.skillUnlocked.includes(hub)) {
+      p.skillUnlocked.push(hub);
+      logLokAbility(p, hub);
+    }
   }
 }
 
@@ -1993,6 +2046,7 @@ function tryLevelUp(p: Player) {
         ? `Level up! You are now level ${p.level} (+${SKILL_POINTS_PER_LEVEL} skill point).`
         : `Level up ×${gained}! You are now level ${p.level} (+${gained * SKILL_POINTS_PER_LEVEL} skill points banked).`,
     );
+    syncLokLevel(p);
   }
 
   let echoes = 0;
@@ -2055,6 +2109,8 @@ function rewardMobKill(p: Player, mob: Mob, now: number) {
   for (const mat of mob.drops ?? []) {
     if (Math.random() < 0.65) {
       grantBaseMat(p, mat, 1);
+      const def = CATALOG_BY_SLUG[mat];
+      if (def) logLokDrop(p, def.id, 1);
       dropNotes.push(matDisplayName(mat));
     }
   }
@@ -2063,6 +2119,7 @@ function rewardMobKill(p: Player, mob: Mob, now: number) {
       const def = CATALOG_BY_SLUG[rare.slug];
       if (def) {
         addItem(p.inventory, def.id, 1);
+        logLokDrop(p, def.id, 1);
         dropNotes.push(def.name);
       } else {
         grantBaseMat(p, rare.slug, 1);
@@ -2075,6 +2132,8 @@ function rewardMobKill(p: Player, mob: Mob, now: number) {
     const shinyMat = rollShinyMat(mob.archetype);
     if (shinyMat) {
       grantBaseMat(p, shinyMat, 1);
+      const def = CATALOG_BY_SLUG[shinyMat];
+      if (def) logLokDrop(p, def.id, 1);
       dropNotes.push(matDisplayName(shinyMat));
     }
     despawnShinyClones(mob, now);
@@ -2460,6 +2519,7 @@ function handleSpellBuy(p: Player, id: AbilityId) {
   }
   p.dust -= cost;
   p.learned.push(id);
+  logLokAbility(p, id);
   pushLog(p, `Learned ${abilityLabel(id)} (-${cost} Dust).`);
   send(p.ws, snapshotFor(p));
   handleNpcInteract(p, TRAINER.id);
@@ -2487,6 +2547,7 @@ function handleSkillUnlock(p: Player, nodeId: string) {
   }
   p.skillPoints -= 1;
   p.skillUnlocked.push(nodeId);
+  logLokAbility(p, nodeId);
   syncVitals(p, false);
   const node = SKILL_NODES[nodeId]!;
   pushLog(
@@ -2533,6 +2594,7 @@ function handleDebugMaxLevel(p: Player) {
   }
   syncVitals(p, true);
   p.levelUpUntil = Date.now() + 2400;
+  syncLokLevel(p);
 
   const learnedSet = new Set(p.learned);
   let added = 0;
@@ -2544,6 +2606,7 @@ function handleDebugMaxLevel(p: Player) {
       if (learnedSet.has(id)) continue;
       p.learned.push(id);
       learnedSet.add(id);
+      logLokAbility(p, id);
       added += 1;
     }
   }
@@ -3548,6 +3611,7 @@ function handleGather(p: Player, nodeId: string) {
   p.animUntil = now + Math.min(node.interactMs, 1200);
   const yieldId = node.yields[Math.floor(Math.random() * node.yields.length)] ?? node.yields[0];
   grantBaseMat(p, yieldId, 1);
+  logLokHarvest(p, yieldId, 1);
   node.readyAt = now + node.respawnMs;
   relocateGatherNode(fieldNodes, node);
   pushLog(p, `Got ${matDisplayName(yieldId)} ×1.`);
@@ -3599,6 +3663,7 @@ function handleCraft(p: Player, itemId: number) {
   } else {
     addItem(p.inventory, def.id, 1);
   }
+  logLokCraft(p, def.id, 1);
   const prevLv = p.craftSkills[skill]?.level ?? 1;
   grantCraftXp(p, skill, craftXpForRecipe(def.craftLevel, skillLv));
   const nextLv = p.craftSkills[skill]?.level ?? prevLv;
