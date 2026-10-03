@@ -259,6 +259,14 @@ fn parse_entries(value: &serde_json::Value, require_seq: bool) -> Result<Vec<Log
     Ok(entries)
 }
 
+fn req_label(value: &serde_json::Value, key: &str) -> Result<String, String> {
+    let raw = value.get(key).and_then(|v| v.as_str()).ok_or_else(|| format!("missing {key}"))?;
+    if raw.is_empty() || raw.len() > 128 || !raw.bytes().all(|b| (0x20..=0x7e).contains(&b)) {
+        return Err(format!("bad {key}"));
+    }
+    Ok(raw.to_string())
+}
+
 fn req_u64(value: &serde_json::Value, key: &str) -> Result<u64, String> {
     let raw = value.get(key).ok_or_else(|| format!("missing {key}"))?;
     if let Some(n) = raw.as_u64() {
@@ -345,6 +353,35 @@ pub(crate) fn parse_input(value: &serde_json::Value) -> Result<Input, String> {
         }),
         "settle" => Ok(Input::Settle {
             listing_id: req_u256(value, "listingId")?,
+        }),
+        "levelUp" => {
+            let level = req_u64(value, "level")?;
+            if level == 0 || level > u64::from(u32::MAX) {
+                return Err("level out of range".to_string());
+            }
+            Ok(Input::LevelUp {
+                token_id: req_u256(value, "tokenId")?,
+                level: level as u32,
+            })
+        }
+        "learnAbility" => Ok(Input::LearnAbility {
+            token_id: req_u256(value, "tokenId")?,
+            ability_id: req_label(value, "abilityId")?,
+        }),
+        "craft" => Ok(Input::Craft {
+            token_id: req_u256(value, "tokenId")?,
+            item_id: req_u256(value, "itemId")?,
+            amount: req_u256(value, "amount")?,
+        }),
+        "harvest" => Ok(Input::Harvest {
+            token_id: req_u256(value, "tokenId")?,
+            material_id: req_label(value, "materialId")?,
+            amount: req_u256(value, "amount")?,
+        }),
+        "itemDrop" => Ok(Input::ItemDrop {
+            token_id: req_u256(value, "tokenId")?,
+            item_id: req_u256(value, "itemId")?,
+            amount: req_u256(value, "amount")?,
         }),
         other => Err(format!("unknown input type {other}")),
     }
@@ -434,6 +471,34 @@ pub(crate) fn input_to_json(input: &Input) -> serde_json::Value {
         Input::Settle { listing_id } => serde_json::json!({
             "type": "settle",
             "listingId": s(listing_id),
+        }),
+        Input::LevelUp { token_id, level } => serde_json::json!({
+            "type": "levelUp",
+            "tokenId": s(token_id),
+            "level": level,
+        }),
+        Input::LearnAbility { token_id, ability_id } => serde_json::json!({
+            "type": "learnAbility",
+            "tokenId": s(token_id),
+            "abilityId": ability_id,
+        }),
+        Input::Craft { token_id, item_id, amount } => serde_json::json!({
+            "type": "craft",
+            "tokenId": s(token_id),
+            "itemId": s(item_id),
+            "amount": s(amount),
+        }),
+        Input::Harvest { token_id, material_id, amount } => serde_json::json!({
+            "type": "harvest",
+            "tokenId": s(token_id),
+            "materialId": material_id,
+            "amount": s(amount),
+        }),
+        Input::ItemDrop { token_id, item_id, amount } => serde_json::json!({
+            "type": "itemDrop",
+            "tokenId": s(token_id),
+            "itemId": s(item_id),
+            "amount": s(amount),
         }),
     }
 }

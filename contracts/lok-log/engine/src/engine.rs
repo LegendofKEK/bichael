@@ -5,7 +5,7 @@ use std::fmt;
 use crate::chain::Chain;
 use crate::event::{entry_hash, Input, Outcome};
 use crate::ids::genesis_root;
-use crate::state::{Key, State};
+use crate::state::{label_key, Key, State};
 use crate::u256::U256;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -35,6 +35,12 @@ pub enum EngineError {
     /// The event does not name this character. Auction events are still applied by `World`
     /// onto every affected character's own chain; a lone engine has no shared listing book.
     NotOnCharacterLog,
+    /// Level was zero, above the 16-bit summary, or not exactly the next level.
+    BadLevel,
+    /// This character already recorded that ability.
+    AlreadyKnown,
+    /// Ability, material, or item id is empty or not a printable token.
+    BadId,
 }
 
 impl fmt::Display for EngineError {
@@ -58,8 +64,23 @@ impl fmt::Display for EngineError {
             Self::ConflictingLog => write!(f, "character logs disagree on an event"),
             Self::NotOnCharacterLog => write!(f, "event does not involve this character"),
             Self::ReplayInbound => write!(f, "inbound nonce was already consumed or is out of order"),
+            Self::BadLevel => write!(f, "level is not the next level"),
+            Self::AlreadyKnown => write!(f, "already known"),
+            Self::BadId => write!(f, "id is empty or invalid"),
         }
     }
+}
+
+pub(crate) const LABEL_MAX: usize = 128;
+
+pub(crate) fn parse_label(raw: &str) -> Result<&str, EngineError> {
+    if raw.is_empty() || raw.len() > LABEL_MAX {
+        return Err(EngineError::BadId);
+    }
+    if !raw.bytes().all(|b| (0x20..=0x7e).contains(&b)) {
+        return Err(EngineError::BadId);
+    }
+    Ok(raw)
 }
 
 pub struct Engine {
@@ -150,7 +171,66 @@ impl Engine {
             Input::List { .. } | Input::Bid { .. } | Input::Cancel { .. } | Input::Settle { .. } => {
                 Err(EngineError::NotOnCharacterLog)
             }
+            Input::LevelUp { token_id, level } => self.apply_level(*token_id, *level),
+            Input::LearnAbility { token_id, ability_id } => self.learn(*token_id, ability_id),
+            Input::Craft { token_id, item_id, amount } => self.note_craft(*token_id, *item_id, *amount),
+            Input::Harvest { token_id, material_id, amount } => self.note_harvest(*token_id, material_id, *amount),
+            Input::ItemDrop { token_id, item_id, amount } => self.drop_item(*token_id, *item_id, *amount),
         }
+    }
+
+    fn apply_level(&mut self, token_id: U256, level: u32) -> Result<(), EngineError> {
+        self.involves(&token_id)?;
+        let current = self.state.level_u32();
+        if level == 0 || level > 65535 || current >= 65535 || level != current + 1 {
+            return Err(EngineError::BadLevel);
+        }
+        self.state.set_level(level);
+        Ok(())
+    }
+
+    fn learn(&mut self, token_id: U256, ability_id: &str) -> Result<(), EngineError> {
+        self.involves(&token_id)?;
+        parse_label(ability_id)?;
+        let key = label_key(ability_id);
+        if self.state.knows_ability_key(&key) {
+            return Err(EngineError::AlreadyKnown);
+        }
+        self.state.mark_ability(key);
+        Ok(())
+    }
+
+    fn note_craft(&mut self, token_id: U256, item_id: U256, amount: U256) -> Result<(), EngineError> {
+        self.involves(&token_id)?;
+        if item_id == U256::ZERO {
+            return Err(EngineError::BadId);
+        }
+        if amount == U256::ZERO {
+            return Err(EngineError::ZeroAmount);
+        }
+        self.state
+            .add_count(Key::Craft(item_id), amount)
+            .map_err(|_| EngineError::Overflow)?;
+        Ok(())
+    }
+
+    fn note_harvest(&mut self, token_id: U256, material_id: &str, amount: U256) -> Result<(), EngineError> {
+        self.involves(&token_id)?;
+        parse_label(material_id)?;
+        if amount == U256::ZERO {
+            return Err(EngineError::ZeroAmount);
+        }
+        self.state
+            .add_count(Key::Harvest(label_key(material_id)), amount)
+            .map_err(|_| EngineError::Overflow)?;
+        Ok(())
+    }
+
+    fn drop_item(&mut self, token_id: U256, item_id: U256, amount: U256) -> Result<(), EngineError> {
+        if item_id == U256::ZERO {
+            return Err(EngineError::BadId);
+        }
+        self.credit_item(token_id, item_id, amount)
     }
 
     /// Check the nonce, apply the credit, then record it. A failed credit does not consume the nonce.

@@ -7,7 +7,17 @@ import { defaultWasmPath, loadLokExports, lokCall, lokOut, type LokExports } fro
 export type LokResult = { ok: true } | { ok: false; error: string };
 
 type EngineItem = { itemId: string; amount: string };
-type EngineCharacter = { tokenId: string; kek: string; items: EngineItem[] };
+type EngineCraft = { itemId: string; amount: string };
+type EngineHarvest = { materialId: string; amount: string };
+type EngineCharacter = {
+  tokenId: string;
+  kek: string;
+  level?: number;
+  abilities?: string[];
+  crafts?: EngineCraft[];
+  harvests?: EngineHarvest[];
+  items: EngineItem[];
+};
 type EngineListing = {
   id: string;
   seller: string;
@@ -175,6 +185,50 @@ export class LokWorld {
   /** Drop spendable KEK on this character's log. Escrowed bids are not spendable. No chain transaction. */
   withdrawKek(tokenId: string, amount: string): LokResult {
     return this.apply({ op: "withdrawKek", tokenId, amount });
+  }
+
+  /** Record the next level. Rejects a skip. Does not mint KEK. */
+  levelUp(tokenId: string, level: number): LokResult {
+    return this.apply({ op: "levelUp", tokenId, level });
+  }
+
+  /** Record one learned ability or skill node. A repeat is rejected. */
+  learnAbility(tokenId: string, abilityId: string): LokResult {
+    return this.apply({ op: "learnAbility", tokenId, abilityId });
+  }
+
+  /** Record a successful craft. Does not credit spendable items or KEK. */
+  craft(tokenId: string, itemId: string, amount: string): LokResult {
+    return this.apply({ op: "craft", tokenId, itemId, amount });
+  }
+
+  /** Record a successful gather. Does not credit spendable items or KEK. */
+  harvest(tokenId: string, materialId: string, amount: string): LokResult {
+    return this.apply({ op: "harvest", tokenId, materialId, amount });
+  }
+
+  /** Loot into this character's log inventory. Not a KEK mint. */
+  itemDrop(tokenId: string, itemId: string, amount: string): LokResult {
+    return this.apply({ op: "itemDrop", tokenId, itemId, amount });
+  }
+
+  levelOf(tokenId: string): number {
+    return this.state.characters.find((c) => c.tokenId === tokenId)?.level ?? 0;
+  }
+
+  hasAbility(tokenId: string, abilityId: string): boolean {
+    const me = this.state.characters.find((c) => c.tokenId === tokenId);
+    return (me?.abilities ?? []).includes(abilityId);
+  }
+
+  craftOf(tokenId: string, itemId: string): string {
+    const me = this.state.characters.find((c) => c.tokenId === tokenId);
+    return me?.crafts?.find((row) => row.itemId === itemId)?.amount ?? "0";
+  }
+
+  harvestOf(tokenId: string, materialId: string): string {
+    const me = this.state.characters.find((c) => c.tokenId === tokenId);
+    return me?.harvests?.find((row) => row.materialId === materialId)?.amount ?? "0";
   }
 
   sendItem(from: string, to: string, itemId: string, amount: string): LokResult {

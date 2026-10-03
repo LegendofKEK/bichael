@@ -136,3 +136,59 @@ test("deposit nonce replay fails and two recorded nonces credit twice", () => {
   assert.equal(lok.itemOf(a.tokenId, "7"), "2");
 });
 
+
+test("level, ability, craft, harvest, and drop replay and a bad event does not append", () => {
+  const dir = mkdtempSync(join(tmpdir(), "lok-game-"));
+  const lok = LokWorld.open(dir, undefined, {});
+  const a = lok.spawn("char-a", "Ada", 0);
+  assert.equal(a.ok, true);
+  if (!a.ok) return;
+  assert.equal(lok.levelOf(a.tokenId), 1);
+  assert.equal(lok.levelUp(a.tokenId, 2).ok, true);
+  assert.equal(lok.levelOf(a.tokenId), 2);
+  const len = lok.length;
+  const skip = lok.levelUp(a.tokenId, 4);
+  assert.equal(skip.ok, false);
+  if (!skip.ok) assert.match(skip.error, /level/i);
+  assert.equal(lok.length, len);
+  assert.equal(lok.levelOf(a.tokenId), 2);
+
+  assert.equal(lok.learnAbility(a.tokenId, "fire").ok, true);
+  assert.equal(lok.hasAbility(a.tokenId, "fire"), true);
+  const againAbility = lok.learnAbility(a.tokenId, "fire");
+  assert.equal(againAbility.ok, false);
+  if (!againAbility.ok) assert.match(againAbility.error, /already known/i);
+  assert.equal(lok.length, len + 1);
+
+  assert.equal(lok.craft(a.tokenId, "9", "1").ok, true);
+  assert.equal(lok.craftOf(a.tokenId, "9"), "1");
+  assert.equal(lok.itemOf(a.tokenId, "9"), "0");
+  assert.equal(lok.kekOf(a.tokenId), "0");
+  const badCraft = lok.craft(a.tokenId, "0", "1");
+  assert.equal(badCraft.ok, false);
+
+  assert.equal(lok.harvest(a.tokenId, "dustgrain", "2").ok, true);
+  assert.equal(lok.harvestOf(a.tokenId, "dustgrain"), "2");
+  const badHarvest = lok.harvest(a.tokenId, "", "1");
+  assert.equal(badHarvest.ok, false);
+  assert.equal(lok.harvestOf(a.tokenId, "dustgrain"), "2");
+
+  assert.equal(lok.itemDrop(a.tokenId, "7", "2").ok, true);
+  assert.equal(lok.itemOf(a.tokenId, "7"), "2");
+  assert.equal(lok.kekOf(a.tokenId), "0");
+  const before = lok.length;
+  const badDrop = lok.itemDrop(a.tokenId, "0", "1");
+  assert.equal(badDrop.ok, false);
+  if (!badDrop.ok) assert.match(badDrop.error, /invalid/i);
+  assert.equal(lok.length, before);
+  assert.equal(lok.itemOf(a.tokenId, "7"), "2");
+
+  const again = LokWorld.open(dir, undefined, {});
+  assert.equal(again.levelOf(a.tokenId), 2);
+  assert.equal(again.hasAbility(a.tokenId, "fire"), true);
+  assert.equal(again.craftOf(a.tokenId, "9"), "1");
+  assert.equal(again.harvestOf(a.tokenId, "dustgrain"), "2");
+  assert.equal(again.itemOf(a.tokenId, "7"), "2");
+  assert.equal(again.kekOf(a.tokenId), "0");
+  assert.equal(again.length, lok.length);
+});

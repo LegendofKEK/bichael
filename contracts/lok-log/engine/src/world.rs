@@ -15,10 +15,10 @@ use std::collections::{BTreeMap, BTreeSet};
 use crate::abi::keccak256;
 use crate::chain::{Chain, CharacterLogDocument, LoggedEntry, ReplayStop, WorldDocument};
 use crate::checkpoint::{Checkpoint, Export};
-use crate::engine::EngineError;
+use crate::engine::{parse_label, EngineError};
 use crate::event::{entry_hash, Input};
 use crate::ids::{genesis_root, world_genesis};
-use crate::state::{Key, State};
+use crate::state::{label_key, Key, State};
 use crate::u256::U256;
 
 #[derive(Clone, Debug)]
@@ -31,6 +31,10 @@ struct Character {
     committed: u64,
     /// Deposit and import nonces consumed on this character. Next accepted nonce is this plus one.
     inbound_applied: u64,
+    /// Ability ids recorded on this character. Rebuilt by replay.
+    abilities: BTreeSet<String>,
+    /// Material id to gathered amount. Rebuilt by replay. Not a spendable balance.
+    harvests: BTreeMap<String, U256>,
 }
 
 /// An auction listing. The item amount is escrowed out of the seller's spendable
@@ -136,6 +140,43 @@ impl World {
     /// so it cannot be transferred, exported, or listed again.
     pub fn item_balance(&self, token_id: &U256, item_id: &U256) -> Option<U256> {
         self.characters.get(token_id).map(|c| c.state.get(&Key::Item(*item_id)))
+    }
+
+    pub fn level(&self, token_id: &U256) -> Option<u32> {
+        self.characters.get(token_id).map(|c| c.state.level_u32())
+    }
+
+    pub fn knows(&self, token_id: &U256, ability_id: &str) -> bool {
+        self.characters
+            .get(token_id)
+            .map(|c| c.abilities.contains(ability_id))
+            .unwrap_or(false)
+    }
+
+    pub fn abilities_of(&self, token_id: &U256) -> Vec<String> {
+        self.characters
+            .get(token_id)
+            .map(|c| c.abilities.iter().cloned().collect())
+            .unwrap_or_default()
+    }
+
+    pub fn crafted(&self, token_id: &U256, item_id: &U256) -> Option<U256> {
+        self.characters.get(token_id).map(|c| c.state.get(&Key::Craft(*item_id)))
+    }
+
+    pub fn crafts_of(&self, token_id: &U256) -> Vec<(U256, U256)> {
+        self.character_state(token_id).map(|state| state.crafts()).unwrap_or_default()
+    }
+
+    pub fn harvested(&self, token_id: &U256, material_id: &str) -> Option<U256> {
+        self.characters.get(token_id).map(|c| c.harvests.get(material_id).copied().unwrap_or(U256::ZERO))
+    }
+
+    pub fn harvests_of(&self, token_id: &U256) -> Vec<(String, U256)> {
+        self.characters
+            .get(token_id)
+            .map(|c| c.harvests.iter().map(|(k, v)| (k.clone(), *v)).collect())
+            .unwrap_or_default()
     }
 
     pub fn listing(&self, id: &U256) -> Option<&Listing> {
@@ -656,6 +697,44 @@ impl World {
                 touch.insert(winner);
                 touch.insert(listing.seller);
             }
+            Input::LevelUp { token_id, level } => {
+                if *level == 0 || *level > 65535 {
+                    return Err(EngineError::BadLevel);
+                }
+                if !self.characters.contains_key(token_id) {
+                    return Err(EngineError::NotSpawned);
+                }
+                touch.insert(*token_id);
+            }
+            Input::LearnAbility { token_id, ability_id } => {
+                parse_label(ability_id)?;
+                if !self.characters.contains_key(token_id) {
+                    return Err(EngineError::NotSpawned);
+                }
+                touch.insert(*token_id);
+            }
+            Input::Craft { token_id, item_id, amount } | Input::ItemDrop { token_id, item_id, amount } => {
+                if *amount == U256::ZERO {
+                    return Err(EngineError::ZeroAmount);
+                }
+                if *item_id == U256::ZERO {
+                    return Err(EngineError::BadId);
+                }
+                if !self.characters.contains_key(token_id) {
+                    return Err(EngineError::NotSpawned);
+                }
+                touch.insert(*token_id);
+            }
+            Input::Harvest { token_id, material_id, amount } => {
+                if *amount == U256::ZERO {
+                    return Err(EngineError::ZeroAmount);
+                }
+                parse_label(material_id)?;
+                if !self.characters.contains_key(token_id) {
+                    return Err(EngineError::NotSpawned);
+                }
+                touch.insert(*token_id);
+            }
         }
         Ok(touch)
     }
@@ -680,6 +759,8 @@ impl World {
                         entries: Vec::new(),
                         committed: 0,
                         inbound_applied: 0,
+                        abilities: BTreeSet::new(),
+                        harvests: BTreeMap::new(),
                     },
                 );
                 Ok(())
@@ -718,7 +799,96 @@ impl World {
             Input::Bid { listing_id, bidder, amount } => self.bid(*listing_id, *bidder, *amount, touch),
             Input::Cancel { listing_id, seller } => self.cancel(*listing_id, *seller, touch),
             Input::Settle { listing_id } => self.settle(*listing_id, touch),
+            Input::LevelUp { token_id, level } => {
+                if touch.contains(token_id) {
+                    self.apply_level(*token_id, *level)?;
+                }
+                Ok(())
+            }
+            Input::LearnAbility { token_id, ability_id } => {
+                if touch.contains(token_id) {
+                    self.learn(*token_id, ability_id)?;
+                }
+                Ok(())
+            }
+            Input::Craft { token_id, item_id, amount } => {
+                if touch.contains(token_id) {
+                    self.note_craft(*token_id, *item_id, *amount)?;
+                }
+                Ok(())
+            }
+            Input::Harvest { token_id, material_id, amount } => {
+                if touch.contains(token_id) {
+                    self.note_harvest(*token_id, material_id, *amount)?;
+                }
+                Ok(())
+            }
+            Input::ItemDrop { token_id, item_id, amount } => {
+                if touch.contains(token_id) {
+                    if *item_id == U256::ZERO {
+                        return Err(EngineError::BadId);
+                    }
+                    self.credit_item(*token_id, *item_id, *amount)?;
+                }
+                Ok(())
+            }
         }
+    }
+
+    fn apply_level(&mut self, token_id: U256, level: u32) -> Result<(), EngineError> {
+        let ch = self.characters.get_mut(&token_id).ok_or(EngineError::NotSpawned)?;
+        let current = ch.state.level_u32();
+        if level == 0 || level > 65535 || current >= 65535 || level != current + 1 {
+            return Err(EngineError::BadLevel);
+        }
+        ch.state.set_level(level);
+        Ok(())
+    }
+
+    fn learn(&mut self, token_id: U256, ability_id: &str) -> Result<(), EngineError> {
+        parse_label(ability_id)?;
+        let ch = self.characters.get_mut(&token_id).ok_or(EngineError::NotSpawned)?;
+        if !ch.abilities.insert(ability_id.to_string()) {
+            return Err(EngineError::AlreadyKnown);
+        }
+        let key = label_key(ability_id);
+        if ch.state.knows_ability_key(&key) {
+            return Err(EngineError::AlreadyKnown);
+        }
+        ch.state.mark_ability(key);
+        Ok(())
+    }
+
+    fn note_craft(&mut self, token_id: U256, item_id: U256, amount: U256) -> Result<(), EngineError> {
+        if item_id == U256::ZERO {
+            return Err(EngineError::BadId);
+        }
+        if amount == U256::ZERO {
+            return Err(EngineError::ZeroAmount);
+        }
+        let ch = self.characters.get_mut(&token_id).ok_or(EngineError::NotSpawned)?;
+        ch.state.add_count(Key::Craft(item_id), amount).map_err(|_| EngineError::Overflow)?;
+        Ok(())
+    }
+
+    fn note_harvest(&mut self, token_id: U256, material_id: &str, amount: U256) -> Result<(), EngineError> {
+        parse_label(material_id)?;
+        if amount == U256::ZERO {
+            return Err(EngineError::ZeroAmount);
+        }
+        let ch = self.characters.get_mut(&token_id).ok_or(EngineError::NotSpawned)?;
+        let next = ch
+            .harvests
+            .get(material_id)
+            .copied()
+            .unwrap_or(U256::ZERO)
+            .checked_add(amount)
+            .ok_or(EngineError::Overflow)?;
+        ch.harvests.insert(material_id.to_string(), next);
+        ch.state
+            .add_count(Key::Harvest(label_key(material_id)), amount)
+            .map_err(|_| EngineError::Overflow)?;
+        Ok(())
     }
 
     fn link_at(&mut self, input: &Input, touch: &BTreeSet<U256>, seq: u64) -> AppliedEvent {

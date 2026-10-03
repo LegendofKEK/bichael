@@ -25,6 +25,17 @@ pub enum Input {
     Bid { listing_id: U256, bidder: U256, amount: U256 },
     Cancel { listing_id: U256, seller: U256 },
     Settle { listing_id: U256 },
+    /// Next level for this character. Must be exactly one above the logged level.
+    /// Does not mint KEK or items.
+    LevelUp { token_id: U256, level: u32 },
+    /// One ability or skill-node id. A second record of the same id is rejected.
+    LearnAbility { token_id: U256, ability_id: String },
+    /// A successful craft. Counts the crafted amount. Does not credit spendable items or KEK.
+    Craft { token_id: U256, item_id: U256, amount: U256 },
+    /// A successful gather. Counts the material. Does not credit spendable items or KEK.
+    Harvest { token_id: U256, material_id: String, amount: U256 },
+    /// Loot into this character's log inventory. Not a KEK mint.
+    ItemDrop { token_id: U256, item_id: U256, amount: U256 },
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -40,6 +51,12 @@ pub enum Outcome {
 
 fn domain(label: &[u8]) -> [u8; 32] {
     keccak256(label)
+}
+
+fn push_label(buf: &mut Buf, label: &str) {
+    let bytes = label.as_bytes();
+    buf.u64(bytes.len() as u64);
+    buf.bytes.extend_from_slice(bytes);
 }
 
 /// Domain-separated id of an input: `keccak256(abi.encode(tag, ...fields))`.
@@ -109,6 +126,34 @@ pub fn event_id(input: &Input) -> [u8; 32] {
         Input::Settle { listing_id } => {
             buf.b256(&domain(b"LOK_SETTLE_V1"));
             buf.u256(listing_id);
+        }
+        Input::LevelUp { token_id, level } => {
+            buf.b256(&domain(b"LOK_LEVEL_UP_V1"));
+            buf.u256(token_id);
+            buf.u32(*level);
+        }
+        Input::LearnAbility { token_id, ability_id } => {
+            buf.b256(&domain(b"LOK_LEARN_ABILITY_V1"));
+            buf.u256(token_id);
+            push_label(&mut buf, ability_id);
+        }
+        Input::Craft { token_id, item_id, amount } => {
+            buf.b256(&domain(b"LOK_CRAFT_V1"));
+            buf.u256(token_id);
+            buf.u256(item_id);
+            buf.u256(amount);
+        }
+        Input::Harvest { token_id, material_id, amount } => {
+            buf.b256(&domain(b"LOK_HARVEST_V1"));
+            buf.u256(token_id);
+            push_label(&mut buf, material_id);
+            buf.u256(amount);
+        }
+        Input::ItemDrop { token_id, item_id, amount } => {
+            buf.b256(&domain(b"LOK_ITEM_DROP_V1"));
+            buf.u256(token_id);
+            buf.u256(item_id);
+            buf.u256(amount);
         }
     }
     keccak256(&buf.bytes)

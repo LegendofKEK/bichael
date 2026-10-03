@@ -19,6 +19,12 @@ pub enum Key {
     UnspentPoints,
     Kek,
     Item(U256),
+    /// Learned ability. Value is 1. Key data is keccak256 of the ability id.
+    Ability(U256),
+    /// Total amount crafted of an item. Not a spendable balance.
+    Craft(U256),
+    /// Total amount gathered of a material. Key data is keccak256 of the material id. Not spendable.
+    Harvest(U256),
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -54,6 +60,50 @@ impl State {
 
     pub(crate) fn set_kek(&mut self, amount: U256) {
         self.map.insert(Key::Kek, amount);
+    }
+
+    pub fn level_u32(&self) -> u32 {
+        let raw = self.get(&Key::Level);
+        u32::from_be_bytes(raw.0[28..].try_into().expect("4 bytes"))
+    }
+
+    pub(crate) fn set_level(&mut self, level: u32) {
+        self.map.insert(Key::Level, U256::from_u64(u64::from(level)));
+    }
+
+    pub(crate) fn mark_ability(&mut self, id: U256) {
+        self.map.insert(Key::Ability(id), U256::from_u64(1));
+    }
+
+    pub fn knows_ability_key(&self, id: &U256) -> bool {
+        self.get(&Key::Ability(*id)) != U256::ZERO
+    }
+
+    pub(crate) fn add_count(&mut self, key: Key, amount: U256) -> Result<(), ()> {
+        let next = self.get(&key).checked_add(amount).ok_or(())?;
+        self.map.insert(key, next);
+        Ok(())
+    }
+
+    pub fn crafts(&self) -> Vec<(U256, U256)> {
+        self.rows(|key| match key {
+            Key::Craft(id) => Some(*id),
+            _ => None,
+        })
+    }
+
+    pub fn harvest_keys(&self) -> Vec<(U256, U256)> {
+        self.rows(|key| match key {
+            Key::Harvest(id) => Some(*id),
+            _ => None,
+        })
+    }
+
+    fn rows(&self, pick: impl Fn(&Key) -> Option<U256>) -> Vec<(U256, U256)> {
+        self.map
+            .iter()
+            .filter_map(|(key, amount)| pick(key).map(|id| (id, *amount)))
+            .collect()
     }
 
     pub(crate) fn set_item(&mut self, item_id: U256, amount: U256) {
@@ -110,12 +160,15 @@ fn key_tag(key: &Key) -> u8 {
         Key::UnspentPoints => 7,
         Key::Kek => 8,
         Key::Item(_) => 9,
+        Key::Ability(_) => 10,
+        Key::Craft(_) => 11,
+        Key::Harvest(_) => 12,
     }
 }
 
 fn leaf(key: &Key, value: &U256) -> [u8; 32] {
     let key_data = match key {
-        Key::Item(id) => *id,
+        Key::Item(id) | Key::Ability(id) | Key::Craft(id) | Key::Harvest(id) => *id,
         _ => U256::ZERO,
     };
     let mut buf = Buf::new();
@@ -151,4 +204,9 @@ fn commit_map(map: &BTreeMap<Key, U256>) -> [u8; 32] {
 /// Order of `entries` does not matter.
 pub fn commit_entries(entries: impl IntoIterator<Item = (Key, U256)>) -> [u8; 32] {
     commit_map(&entries.into_iter().collect())
+}
+
+/// keccak256(utf-8 label), used as the map key for an ability or material id.
+pub fn label_key(label: &str) -> U256 {
+    U256(keccak256(label.as_bytes()))
 }
