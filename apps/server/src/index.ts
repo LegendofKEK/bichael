@@ -537,19 +537,14 @@ function handleLokSendKek(p: Player, to: string, amount: string) {
   send(p.ws, snapshotFor(p));
 }
 
-function handleLokWithdrawKek(p: Player, amount: string) {
-  const token = lokToken(p);
-  if (!token) {
-    pushLog(p, "Could not open your log identity.");
-    return;
-  }
-  const res = lok.withdrawKek(token, amount);
-  if (!res.ok) {
-    pushLog(p, res.error);
-    return;
-  }
-  pushLog(p, "Withdrew " + amount + " KEK from the in-game counter. No chain withdrawal was submitted.");
-  send(p.ws, snapshotFor(p));
+function handleLokWithdrawKek(p: Player, _amount: string) {
+  // Off until a vault withdrawal is actually queued. Calling lok.withdrawKek here
+  // debits in-game KEK and tells the client nothing was submitted onchain, which burns KEK.
+  // The engine WithdrawKek op stays in place for when that queue exists.
+  pushLog(
+    p,
+    "KEK withdrawal is not available. No in-game KEK was spent, and no chain withdrawal was submitted.",
+  );
 }
 
 function handleLokList(p: Player, tokenId: number, amount: number) {

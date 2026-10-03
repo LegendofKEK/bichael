@@ -332,18 +332,134 @@ impl World {
     }
 
     /// Drop this character's uncommitted tail and rebuild from the logs that remain.
-    /// Another character's copy of a shared trade is left in place.
+    ///
+    /// Conservation rule: Spawn is never dropped. An event is never dropped if any character has committed it, or if a
+    /// committed event depends on it. Dependencies are (1) earlier entries on the same chain,
+    /// (2) the other participants' copies of the same payload (same `seq`), and (3) earlier
+    /// events on the same auction listing. Those events stay as a pinned, still-uncommitted tail
+    /// of this character's log. Everything else in the tail is dropped, and so is anything that
+    /// depends on a dropped event, on any character's chain. Each chain is only ever truncated,
+    /// so surviving hashes stay valid.
+    ///
+    /// Without this a rebase after a one-sided commit would drop a debit that a counterparty has
+    /// already committed the matching credit for, creating KEK or items from nothing.
     pub fn rebase(&mut self, token_id: U256) -> Result<(), EngineError> {
-        let keep = self.characters.get(&token_id).ok_or(EngineError::NotSpawned)?.committed;
+        if !self.characters.contains_key(&token_id) {
+            return Err(EngineError::NotSpawned);
+        }
         let committed: BTreeMap<U256, u64> = self.characters.iter().map(|(id, ch)| (*id, ch.committed)).collect();
+
+        // seq -> listing id, and listing id -> seqs, for dependency tracking.
+        let mut seq_listing: BTreeMap<u64, U256> = BTreeMap::new();
+        for ch in self.characters.values() {
+            for e in &ch.entries {
+                if let Some(id) = listing_id_of(&e.input) {
+                    seq_listing.insert(e.seq, id);
+                }
+            }
+        }
+
+        // 1. Required set: every committed seq plus everything those depend on, to a fixed point.
+        let mut required: BTreeSet<u64> = BTreeSet::new();
+        for ch in self.characters.values() {
+            for e in &ch.entries[..ch.committed as usize] {
+                required.insert(e.seq);
+            }
+            // Spawn is the character's existence (its onchain genesis); a rebase never removes it.
+            for e in &ch.entries {
+                if matches!(e.input, Input::Spawn { .. }) {
+                    required.insert(e.seq);
+                }
+            }
+        }
+        loop {
+            let before = required.len();
+            for ch in self.characters.values() {
+                // (1)+(2): a chain keeps a prefix, so everything before its last required entry is required.
+                if let Some(last) = ch.entries.iter().rposition(|e| required.contains(&e.seq)) {
+                    for e in &ch.entries[..=last] {
+                        required.insert(e.seq);
+                    }
+                }
+            }
+            // (3): earlier events on the same listing as a required event.
+            let mut max_required_per_listing: BTreeMap<U256, u64> = BTreeMap::new();
+            for seq in &required {
+                if let Some(id) = seq_listing.get(seq) {
+                    let m = max_required_per_listing.entry(*id).or_insert(*seq);
+                    if *seq > *m {
+                        *m = *seq;
+                    }
+                }
+            }
+            for (seq, id) in &seq_listing {
+                if let Some(max) = max_required_per_listing.get(id) {
+                    if seq <= max {
+                        required.insert(*seq);
+                    }
+                }
+            }
+            if required.len() == before {
+                break;
+            }
+        }
+
+        // 2. Dropped set: this character's tail minus required, then everything that depends on it.
+        let mut dropped: BTreeSet<u64> = BTreeSet::new();
+        {
+            let ch = &self.characters[&token_id];
+            for e in &ch.entries[ch.committed as usize..] {
+                if !required.contains(&e.seq) {
+                    dropped.insert(e.seq);
+                }
+            }
+        }
+        let mut keep_len: BTreeMap<U256, usize> =
+            self.characters.iter().map(|(id, ch)| (*id, ch.entries.len())).collect();
+        loop {
+            let before = dropped.len();
+            // A dropped listing event drops every later event on that listing.
+            let dropped_listings: BTreeMap<U256, u64> = dropped
+                .iter()
+                .filter_map(|seq| seq_listing.get(seq).map(|id| (*id, *seq)))
+                .fold(BTreeMap::new(), |mut acc, (id, seq)| {
+                    let m = acc.entry(id).or_insert(seq);
+                    if seq < *m {
+                        *m = seq;
+                    }
+                    acc
+                });
+            for (seq, id) in &seq_listing {
+                if let Some(first) = dropped_listings.get(id) {
+                    if seq >= first {
+                        dropped.insert(*seq);
+                    }
+                }
+            }
+            // Truncate each chain at its first dropped entry; the rest of that chain depends on it.
+            for (id, ch) in &self.characters {
+                if let Some(first) = ch.entries.iter().position(|e| dropped.contains(&e.seq)) {
+                    for e in &ch.entries[first..] {
+                        dropped.insert(e.seq);
+                    }
+                    let k = keep_len.get_mut(id).expect("keep_len has every character");
+                    *k = (*k).min(first);
+                }
+            }
+            if dropped.len() == before {
+                break;
+            }
+        }
+        // Required events can never be in the dropped set (required is closed under every dependency).
+        for (id, ch) in &self.characters {
+            if keep_len[id] < ch.committed as usize {
+                return Err(EngineError::ConflictingLog);
+            }
+        }
+
         let mut doc = self.to_document();
         for character in &mut doc.characters {
-            if character.token_id == token_id {
-                if keep as usize > character.entries.len() {
-                    return Err(EngineError::BadRange);
-                }
-                character.entries.truncate(keep as usize);
-            }
+            character.entries.truncate(keep_len[&character.token_id]);
         }
         let mut rebuilt = World::load(&doc).map_err(|_| EngineError::ConflictingLog)?;
         for (id, n) in committed {
@@ -351,6 +467,8 @@ impl World {
                 ch.committed = n.min(ch.entries.len() as u64);
             }
         }
+        // Keep sequence numbers monotonic so a dropped seq is never reused against a surviving copy.
+        rebuilt.next_seq = rebuilt.next_seq.max(self.next_seq);
         *self = rebuilt;
         Ok(())
     }
@@ -871,4 +989,14 @@ fn fit_u32(amount: U256) -> Result<u32, EngineError> {
         return Err(EngineError::ZeroAmount);
     }
     Ok(value)
+}
+
+fn listing_id_of(input: &Input) -> Option<U256> {
+    match input {
+        Input::List { listing_id, .. }
+        | Input::Bid { listing_id, .. }
+        | Input::Cancel { listing_id, .. }
+        | Input::Settle { listing_id } => Some(*listing_id),
+        _ => None,
+    }
 }

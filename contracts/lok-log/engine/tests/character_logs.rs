@@ -61,14 +61,16 @@ fn transfer_is_on_both_logs_and_each_checkpoint_is_independent() {
     assert_eq!(committed_a.log_hash, a_deposit_hash);
     world.commit_span(n(2), 2).unwrap();
 
+    // B committed its copy of the send, so the send is pinned: dropping A's debit while B keeps the
+    // credit would create 4 KEK from nothing. A's rebase keeps it as an uncommitted tail.
     world.rebase(n(1)).unwrap();
-    assert!(world.character_entries(&n(1)).unwrap().iter().all(|e| !matches!(e.input, Input::SendKek { .. })));
     let b_after = world.character_entries(&n(2)).unwrap();
     assert!(b_after.iter().any(|e| e.input == b_send.input && e.hash == b_send.hash));
-    assert_eq!(world.kek_balance(&n(1)), Some(n(10)), "A's uncommitted debit is dropped");
+    assert!(world.character_entries(&n(1)).unwrap().iter().any(|e| matches!(e.input, Input::SendKek { .. })));
+    assert_eq!(world.kek_balance(&n(1)), Some(n(6)), "A's debit is pinned by B's committed credit");
     assert_eq!(world.kek_balance(&n(2)), Some(n(4)), "B's committed credit stays");
     assert_eq!(world.committed_index(&n(2)), Some(2));
-    assert_eq!(world.character_len(&n(1)), Some(2));
+    assert_eq!(world.character_len(&n(1)), Some(3));
 }
 
 #[test]
@@ -132,4 +134,156 @@ fn escrowed_bid_counts_in_the_solvency_snapshot() {
     assert_eq!(world.solvency_kek(&n(2)), Some(n(6)), "escrowed bid is still owed by the vault");
     let snap = world.snapshots().into_iter().find(|s| s.token_id == n(2)).unwrap();
     assert_eq!(snap.solvency_kek, n(6));
+}
+
+fn total_solvency(w: &World) -> U256 {
+    let mut t = U256::ZERO;
+    for s in w.snapshots() {
+        t = t.checked_add(s.solvency_kek).unwrap();
+    }
+    t
+}
+
+/// Net KEK that the surviving logs say entered the system: deposits minus withdrawals, counted once per seq.
+fn expected_total(w: &World) -> U256 {
+    let mut seen = std::collections::BTreeSet::new();
+    let mut dep = U256::ZERO;
+    let mut wd = U256::ZERO;
+    for s in w.snapshots() {
+        for e in w.character_entries(&s.token_id).unwrap() {
+            if !seen.insert(e.seq) {
+                continue;
+            }
+            match &e.input {
+                Input::DepositKek { amount, .. } => dep = dep.checked_add(*amount).unwrap(),
+                Input::WithdrawKek { amount, .. } => wd = wd.checked_add(*amount).unwrap(),
+                _ => {}
+            }
+        }
+    }
+    dep.checked_sub(wd).unwrap()
+}
+
+#[test]
+fn rebase_never_creates_kek_after_a_one_sided_commit() {
+    let mut w = spawn_pair();
+    w.append_deposit_kek(n(1), n(10)).unwrap();
+    w.commit_span(n(1), 2).unwrap();
+    w.append_send_kek(n(1), n(2), n(4)).unwrap();
+    w.commit_span(n(2), 2).unwrap();
+    w.rebase(n(1)).unwrap();
+    assert_eq!(total_solvency(&w), n(10));
+}
+
+#[test]
+fn rebase_cascades_to_uncommitted_dependents_and_does_not_wedge() {
+    let ore = lok_engine::fungible_id("iron_ore");
+    let mut w = spawn_pair();
+    w.append_import_item(n(1), ore, n(1)).unwrap();
+    w.append_deposit_kek(n(2), n(10)).unwrap();
+    w.commit_span(n(1), 2).unwrap();
+    w.commit_span(n(2), 2).unwrap();
+    w.append_list(n(1), n(1), ore, n(1)).unwrap();
+    w.append_bid(n(1), n(2), n(6)).unwrap();
+    // Nobody committed the list or the bid: seller rebases, the dependent bid goes too.
+    w.rebase(n(1)).unwrap();
+    assert!(w.listing(&n(1)).is_none());
+    assert_eq!(w.kek_balance(&n(2)), Some(n(10)));
+    assert_eq!(w.item_balance(&n(1), &ore), Some(n(1)));
+}
+
+#[test]
+fn rebase_keeps_the_list_when_a_bid_on_it_is_committed() {
+    let ore = lok_engine::fungible_id("iron_ore");
+    let mut w = spawn_pair();
+    w.append_import_item(n(1), ore, n(1)).unwrap();
+    w.append_deposit_kek(n(2), n(10)).unwrap();
+    w.commit_span(n(1), 2).unwrap();
+    w.commit_span(n(2), 2).unwrap();
+    w.append_list(n(1), n(1), ore, n(1)).unwrap();
+    w.append_bid(n(1), n(2), n(6)).unwrap();
+    w.commit_span(n(2), 3).unwrap();
+    w.rebase(n(1)).unwrap();
+    assert!(w.listing(&n(1)).is_some(), "the committed bid pins the listing");
+    assert_eq!(w.kek_balance(&n(2)), Some(n(4)));
+    assert_eq!(total_solvency(&w), n(10));
+}
+
+/// Deterministic fuzz: random ops, one-sided commits and rebases never break conservation or wedge.
+#[test]
+fn random_ops_commits_and_rebases_conserve_kek_and_items() {
+    let ore = lok_engine::fungible_id("iron_ore");
+    for seed in 1u64..=40 {
+        let mut x = seed.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+        let mut next = move |m: u64| {
+            x ^= x << 13;
+            x ^= x >> 7;
+            x ^= x << 17;
+            x % m
+        };
+        let mut w = World::new();
+        for t in 1..=3u64 {
+            w.append_spawn(n(t), 1).unwrap();
+        }
+        let mut listing = 0u64;
+        for _ in 0..60 {
+            let a = 1 + next(3);
+            let mut b = 1 + next(3);
+            if b == a {
+                b = 1 + (b % 3);
+            }
+            let amt = 1 + next(5);
+            match next(12) {
+                0 => { let _ = w.append_deposit_kek(n(a), n(amt)); }
+                1 => { let _ = w.append_withdraw_kek(n(a), n(amt)); }
+                2 => { let _ = w.append_import_item(n(a), ore, n(amt)); }
+                3 => { let _ = w.append_send_kek(n(a), n(b), n(amt)); }
+                4 => { let _ = w.append_send_item(n(a), n(b), ore, n(amt)); }
+                5 => { listing += 1; let _ = w.append_list(n(listing), n(a), ore, n(amt)); }
+                6 | 7 => { let _ = w.append_bid(n(1 + next(listing.max(1))), n(a), n(amt + next(20))); }
+                8 => { let _ = w.append_cancel(n(1 + next(listing.max(1))), n(a)); }
+                9 => { let _ = w.append_settle(n(1 + next(listing.max(1)))); }
+                10 => {
+                    let len = w.character_len(&n(a)).unwrap();
+                    let c = w.committed_index(&n(a)).unwrap();
+                    if len > c { let _ = w.commit_span(n(a), c + 1 + next(len - c)); }
+                }
+                _ => { w.rebase(n(a)).unwrap_or_else(|e| panic!("seed {seed}: rebase wedged: {e:?}")); }
+            }
+            assert_eq!(total_solvency(&w), expected_total(&w), "seed {seed}: KEK not conserved");
+            assert_eq!(total_ore(&w, ore), expected_ore(&w), "seed {seed}: items not conserved");
+        }
+    }
+}
+
+fn total_ore(w: &World, ore: U256) -> U256 {
+    let mut t = U256::ZERO;
+    for s in w.snapshots() {
+        t = t.checked_add(w.item_balance(&s.token_id, &ore).unwrap()).unwrap();
+    }
+    for l in w.listings() {
+        if l.item_id == ore {
+            t = t.checked_add(l.amount).unwrap();
+        }
+    }
+    t
+}
+
+fn expected_ore(w: &World) -> U256 {
+    let mut seen = std::collections::BTreeSet::new();
+    let mut inn = U256::ZERO;
+    let mut out = U256::ZERO;
+    for s in w.snapshots() {
+        for e in w.character_entries(&s.token_id).unwrap() {
+            if !seen.insert(e.seq) {
+                continue;
+            }
+            match &e.input {
+                Input::ImportItem { amount, .. } => inn = inn.checked_add(*amount).unwrap(),
+                Input::ExportItem { amount, .. } => out = out.checked_add(*amount).unwrap(),
+                _ => {}
+            }
+        }
+    }
+    inn.checked_sub(out).unwrap()
 }

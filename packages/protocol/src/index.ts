@@ -94,7 +94,7 @@ export const ClientMessageSchema = z.discriminatedUnion("type", [
     to: z.string().min(1).max(32),
     amount: z.string().regex(/^[1-9][0-9]{0,18}$/),
   }),
-  /** Decrease spendable log KEK. Not an onchain withdrawal. */
+  /** Refused until a vault withdrawal is queued. Does not debit in-game KEK. */
   z.object({
     type: z.literal("lok/withdrawKek"),
     amount: z.string().regex(/^[1-9][0-9]{0,18}$/),
