@@ -314,8 +314,8 @@ export type LokSnapshot = {
   kek: string;
   items: LokItemBalance[];
   listings: LokListingView[];
-  /** engine-only: no L2 endpoint. rpc-unwatched: endpoint set, vault not followed. */
-  chain: "engine-only" | "rpc-unwatched";
+  /** engine-only: no endpoint. rpc-unwatched: endpoint set, vault not followed. watching: deposits are applied from the checkpoint. */
+  chain: "engine-only" | "rpc-unwatched" | "watching";
 };
 
 export type LokExploreScope = "yours" | "everyone";

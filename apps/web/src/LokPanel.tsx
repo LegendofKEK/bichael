@@ -41,7 +41,9 @@ export function LokPanel({ you, onClose }: Props) {
   const chainNote =
     lok.chain === "engine-only"
       ? "KEK is deposit-only from Robinhood L2. No chain endpoint is configured. Withdraw drops the in-game counter only; nothing is submitted onchain."
-      : "A chain endpoint is set, but this server is not watching the vault or submitting withdrawals yet.";
+      : lok.chain === "watching"
+        ? "This server is watching the local vault for KEK deposits. Withdrawals are not sent from the client."
+        : "A chain endpoint is set, but this server is not watching the vault or submitting withdrawals yet.";
 
   return (
     <div className="cmd-panel lok-panel">

@@ -61,6 +61,12 @@ export function chainModeFromEnv(env: NodeJS.ProcessEnv = process.env): {
       note: "No LOK_CHAIN_RPC. KEK deposits, KEK withdrawals, and item exports stay engine events; Robinhood L2 is not queried and nothing is submitted.",
     };
   }
+  if (env.LOK_CHECKPOINT?.trim()) {
+    return {
+      chain: "watching",
+      note: "Watching the checkpoint for KEK deposits. Client withdrawals stay off; nothing is submitted onchain.",
+    };
+  }
   return {
     chain: "rpc-unwatched",
     note: "LOK_CHAIN_RPC is set, but no KekVault watcher or withdrawal transaction is wired. Deposits, withdrawals, and exports still only append the per-character logs.",
