@@ -100,6 +100,14 @@ export const ClientMessageSchema = z.discriminatedUnion("type", [
     amount: z.string().regex(/^[1-9][0-9]{0,18}$/),
   }),
   z.object({
+    type: z.literal("lok/deposit"),
+    amount: z.string().regex(/^[1-9][0-9]{0,18}$/),
+  }),
+  z.object({
+    type: z.literal("lok/claimKek"),
+    id: z.string().regex(/^[1-9][0-9]{0,18}$/),
+  }),
+  z.object({
     type: z.literal("lok/list"),
     tokenId: z.number().int().positive(),
     amount: z.number().int().positive().max(1_000_000),
@@ -316,6 +324,8 @@ export type LokSnapshot = {
   listings: LokListingView[];
   /** engine-only: no endpoint. rpc-unwatched: endpoint set, vault not followed. watching: deposits are applied from the checkpoint. */
   chain: "engine-only" | "rpc-unwatched" | "watching";
+  withdrawDelaySec: number | null;
+  queues: { id: string; amount: string; availableAt: number }[];
 };
 
 export type LokExploreScope = "yours" | "everyone";

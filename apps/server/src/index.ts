@@ -160,6 +160,18 @@ import {
 } from "./battlemage-abilities";
 import { playerStance, resolveTimAbility } from "./tim-abilities";
 import { loadLokEnv, startKekDepositWatcher } from "./lok-chain";
+import {
+  claimQueuedWithdrawal,
+  debitAfterQueue,
+  depositKekOnchain,
+  ensureLocalRuleset,
+  linkCharacterNft,
+  loadQueues,
+  queueKekWithdrawal,
+  queuesFor,
+  readWithdrawDelay,
+  vaultDelaySec,
+} from "./lok-vault";
 import { defaultLokDir, LokWorld } from "./lok-world";
 import {
   PARTY_INVITE_RANGE,
@@ -424,6 +436,9 @@ const lok: LokWorld = (() => {
       `[bellgrave] lok log ${world.logPath} entries=${world.length}. ${world.chainNote}`,
     );
     startKekDepositWatcher(world);
+    loadQueues(defaultLokDir());
+    void readWithdrawDelay();
+    void ensureLocalRuleset();
     return world;
   } catch (err) {
     console.error("[bellgrave] lok log failed to open; refusing to start.", err);
@@ -594,14 +609,67 @@ function spendLogKek(p: Player, amount: number): { ok: true } | { ok: false; err
   return lok.spendKek(token, String(amount));
 }
 
-function handleLokWithdrawKek(p: Player, _amount: string) {
-  // Off until a vault withdrawal is actually queued. Calling lok.withdrawKek here
-  // debits in-game KEK and tells the client nothing was submitted onchain, which burns KEK.
-  // The engine WithdrawKek op stays in place for when that queue exists.
-  pushLog(
-    p,
-    "KEK withdrawal is not available. No in-game KEK was spent, and no chain withdrawal was submitted.",
-  );
+function handleLokDeposit(p: Player, amount: string) {
+  const token = lokToken(p);
+  if (!token) {
+    pushLog(p, "Could not open your log identity.");
+    return;
+  }
+  void depositKekOnchain(token, amount).then((res) => {
+    if (!res.ok) pushLog(p, res.error);
+    else {
+      pushLog(
+        p,
+        "Submitted a MockKEK deposit of " + amount + ". The watcher credits it when the nonce is applied. Nothing was minted.",
+      );
+    }
+    send(p.ws, snapshotFor(p));
+  });
+}
+
+function handleLokWithdrawKek(p: Player, amount: string) {
+  const token = lokToken(p);
+  if (!token) {
+    pushLog(p, "Could not open your log identity.");
+    return;
+  }
+  let have = 0n;
+  let cost = 0n;
+  try {
+    have = BigInt(lok.kekOf(token));
+    cost = BigInt(amount);
+  } catch {
+    pushLog(p, "Bad KEK amount. Nothing was spent.");
+    return;
+  }
+  if (have < cost) {
+    pushLog(p, "Need " + amount + " KEK (you have " + have.toString() + "). Nothing was queued.");
+    return;
+  }
+  void debitAfterQueue(
+    () => queueKekWithdrawal(token, amount),
+    () => lok.withdrawKek(token, amount),
+  ).then((res) => {
+    if (!res.ok) {
+      pushLog(p, res.error);
+    } else {
+      const delay = vaultDelaySec();
+      const wait = delay ? Math.round(delay / 3600) + "h" : "the vault delay";
+      pushLog(
+        p,
+        "Queued vault withdrawal #" + res.id + " for " + amount + " KEK. It is not paid out before " + wait + ". Spendable KEK was debited because the queue exists.",
+      );
+    }
+    send(p.ws, snapshotFor(p));
+  });
+}
+
+function handleLokClaim(p: Player, id: string) {
+  void claimQueuedWithdrawal(id).then((res) => {
+    if (!res.ok) pushLog(p, res.error);
+    else pushLog(p, "Claimed vault withdrawal #" + id + ". It was already debited from spendable KEK when it was queued.");
+    send(p.ws, snapshotFor(p));
+  });
 }
 
 function handleLokList(p: Player, tokenId: number, amount: number) {
@@ -1785,7 +1853,10 @@ function snapshotFor(p: Player): SnapshotMessage {
       skillPrestige: p.skillPrestige,
       freeStatPoints: p.freeStatPoints,
       freeStats: { ...p.freeStats },
-      lok: lok.view(lokToken(p)),
+      lok: (() => {
+        const view = lok.view(lokToken(p));
+        return { ...view, withdrawDelaySec: vaultDelaySec(), queues: queuesFor(view.tokenId) };
+      })(),
     },
     units,
     log: p.lastLog.slice(-12),
@@ -1862,6 +1933,7 @@ function createPlayer(
   ws: WebSocket,
   job: JobId = "time_mage",
   gender: "male" | "female" | "pepeka" = "male",
+  existingCharId?: string,
 ): Player {
   // Replace only this wallet's live session — other players stay in the world (multiplayer).
   const prev = players.get(wallet);
@@ -1873,7 +1945,7 @@ function createPlayer(
     }
   }
   const vitals = combinedJobVitals(job, 1, null);
-  const charId = `c_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+  const charId = existingCharId ?? `c_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
   const p: Player = {
     wallet,
     charId,
@@ -3735,6 +3807,34 @@ function handleCraft(p: Player, itemId: number) {
   send(p.ws, snapshotFor(p));
 }
 
+function adoptOrphanLogs(wallet: string, ws: WebSocket) {
+  const taken = new Set<string>();
+  for (const slots of accountRoster.values()) {
+    for (const id of slots.keys()) taken.add(id);
+  }
+  const rows = lok.boundChars();
+  const counts = new Map<string, number>();
+  for (const row of rows) {
+    const key = row.name.trim().toLowerCase();
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+  let adopted = false;
+  for (const row of rows) {
+    if (taken.has(row.charId)) continue;
+    const jobId = JOB_IDS[row.job];
+    const job = jobId && isJobId(jobId) && JOBS[jobId].playable ? jobId : "time_mage";
+    const crowded = (counts.get(row.name.trim().toLowerCase()) ?? 0) > 1;
+    const name = (crowded ? row.name + " #" + row.tokenId : row.name).slice(0, 16);
+    if (name !== row.name) lok.setBoundName(row.charId, name);
+    createPlayer(wallet, name, ws, job, "male", row.charId);
+    adopted = true;
+  }
+  if (adopted) {
+    players.delete(wallet);
+    walletToPlayer.delete(wallet);
+  }
+}
+
 function onMessage(ws: WebSocket, data: string) {
   let json: unknown;
   try {
@@ -3757,6 +3857,7 @@ function onMessage(ws: WebSocket, data: string) {
   if (msg.type === "auth") {
     const wallet = msg.wallet.toLowerCase();
     (ws as WebSocket & { wallet?: string }).wallet = wallet;
+    adoptOrphanLogs(wallet, ws);
 
     // Park any live character — keep roster, leave the world until char/enter or char/create.
     // Otherwise tick broadcasts keep pushing snapshots and the create screen auto-enters the old char.
@@ -3787,10 +3888,22 @@ function onMessage(ws: WebSocket, data: string) {
   }
 
   if (msg.type === "char/create") {
+    if (lok.nameTaken(msg.name)) {
+      send(ws, { type: "error", message: "That name is already on the log. Pick another." });
+      return;
+    }
     const job = isJobId(msg.job) && JOBS[msg.job].playable ? msg.job : "time_mage";
     const gender =
       msg.gender === "female" ? "female" : msg.gender === "pepeka" ? "pepeka" : "male";
     const p = createPlayer(wallet, msg.name, ws, job, gender);
+    const minted = lok.tokenFor(p.charId);
+    if (minted) {
+      void linkCharacterNft(minted, JOB_IDS.indexOf(job)).then((res) => {
+        if (p.ws.readyState !== p.ws.OPEN) return;
+        pushLog(p, res.ok ? "Linked character NFT #" + res.tokenId + " on the local checkpoint." : res.error);
+        send(p.ws, snapshotFor(p));
+      });
+    }
     pushLog(
       p,
       `${JOBS[job].name} created. Claim starter. At L${SUBJOB_UNLOCK_LEVEL}+ the Job Master sets a support job (half level).`,
@@ -3933,6 +4046,12 @@ function onMessage(ws: WebSocket, data: string) {
       break;
     case "lok/withdrawKek":
       handleLokWithdrawKek(p, msg.amount);
+      break;
+    case "lok/deposit":
+      handleLokDeposit(p, msg.amount);
+      break;
+    case "lok/claimKek":
+      handleLokClaim(p, msg.id);
       break;
     case "lok/list":
       handleLokList(p, msg.tokenId, msg.amount);
