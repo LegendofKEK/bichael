@@ -29,6 +29,9 @@ pub enum EngineError {
     BadRange,
     /// Two character logs give the same sequence number a different payload.
     ConflictingLog,
+    /// Deposit or import nonce was already consumed, skipped, or zero.
+    /// Inbounds for one character are the chain's `inboundCount` and apply in order.
+    ReplayInbound,
     /// The event does not name this character. Auction events are still applied by `World`
     /// onto every affected character's own chain; a lone engine has no shared listing book.
     NotOnCharacterLog,
@@ -54,6 +57,7 @@ impl fmt::Display for EngineError {
             Self::BadRange => write!(f, "checkpoint span is empty or out of order"),
             Self::ConflictingLog => write!(f, "character logs disagree on an event"),
             Self::NotOnCharacterLog => write!(f, "event does not involve this character"),
+            Self::ReplayInbound => write!(f, "inbound nonce was already consumed or is out of order"),
         }
     }
 }
@@ -63,6 +67,8 @@ pub struct Engine {
     starting_job: u8,
     state: State,
     chain: Chain,
+    /// How many deposit/import nonces this character has consumed. The next accepted nonce is this plus one.
+    inbound_applied: u64,
 }
 
 impl Engine {
@@ -74,6 +80,7 @@ impl Engine {
             starting_job,
             state: State::new(),
             chain: Chain::new(anchor),
+            inbound_applied: 0,
         }
     }
 
@@ -130,9 +137,13 @@ impl Engine {
                 self.state.spawn(*token_id, *starting_job);
                 Ok(())
             }
-            Input::DepositKek { token_id, amount } => self.credit_kek(*token_id, *amount),
+            Input::DepositKek { token_id, amount, nonce } => {
+                self.credit_inbound(*token_id, *nonce, |engine| engine.credit_kek(*token_id, *amount))
+            }
             Input::WithdrawKek { token_id, amount } => self.debit_kek(*token_id, *amount),
-            Input::ImportItem { token_id, item_id, amount } => self.credit_item(*token_id, *item_id, *amount),
+            Input::ImportItem { token_id, item_id, amount, nonce } => {
+                self.credit_inbound(*token_id, *nonce, |engine| engine.credit_item(*token_id, *item_id, *amount))
+            }
             Input::ExportItem { token_id, item_id, amount } => self.debit_item(*token_id, *item_id, *amount),
             Input::SendKek { from, to, amount } => self.transfer_kek(*from, *to, *amount),
             Input::SendItem { from, to, item_id, amount } => self.transfer_item(*from, *to, *item_id, *amount),
@@ -140,6 +151,23 @@ impl Engine {
                 Err(EngineError::NotOnCharacterLog)
             }
         }
+    }
+
+    /// Check the nonce, apply the credit, then record it. A failed credit does not consume the nonce.
+    fn credit_inbound(
+        &mut self,
+        token_id: U256,
+        nonce: u64,
+        credit: impl FnOnce(&mut Self) -> Result<(), EngineError>,
+    ) -> Result<(), EngineError> {
+        self.involves(&token_id)?;
+        let next = self.inbound_applied.checked_add(1).ok_or(EngineError::Overflow)?;
+        if nonce == 0 || nonce != next {
+            return Err(EngineError::ReplayInbound);
+        }
+        credit(self)?;
+        self.inbound_applied = nonce;
+        Ok(())
     }
 
     fn involves(&self, token_id: &U256) -> Result<(), EngineError> {

@@ -6,6 +6,21 @@ fn n(v: u64) -> U256 {
     U256::from_u64(v)
 }
 
+fn next_inbound(world: &World, token: U256) -> u64 {
+    world.inbound_applied(&token).unwrap_or(0).saturating_add(1)
+}
+
+fn deposit(world: &mut World, token: U256, amount: U256) -> Result<lok_engine::AppliedEvent, EngineError> {
+    let nonce = next_inbound(world, token);
+    world.append_deposit_kek(token, amount, nonce)
+}
+
+fn import_item(world: &mut World, token: U256, item: U256, amount: U256) -> Result<lok_engine::AppliedEvent, EngineError> {
+    let nonce = next_inbound(world, token);
+    world.append_import_item(token, item, amount, nonce)
+}
+
+
 fn spawn_pair() -> World {
     let mut world = World::new();
     world.append_spawn(n(1), 3).unwrap();
@@ -16,7 +31,7 @@ fn spawn_pair() -> World {
 #[test]
 fn transfer_is_on_both_logs_and_each_checkpoint_is_independent() {
     let mut world = spawn_pair();
-    world.append_deposit_kek(n(1), n(10)).unwrap();
+    deposit(&mut world, n(1), n(10)).unwrap();
     world.append_send_kek(n(1), n(2), n(4)).unwrap();
 
     let (a_at, b_at, a_send, b_send, a_deposit_hash) = {
@@ -76,7 +91,7 @@ fn transfer_is_on_both_logs_and_each_checkpoint_is_independent() {
 #[test]
 fn withdraw_kek_reduces_balance_and_rejects_overspend() {
     let mut world = spawn_pair();
-    world.append_deposit_kek(n(1), n(10)).unwrap();
+    deposit(&mut world, n(1), n(10)).unwrap();
     let drafted = {
         world.append_withdraw_kek(n(1), n(4)).unwrap();
         world.checkpoint_span(&n(1), world.character_len(&n(1)).unwrap()).unwrap()
@@ -93,7 +108,7 @@ fn withdraw_kek_reduces_balance_and_rejects_overspend() {
 
     let mut engine = Engine::open(n(1), 3);
     engine.apply(Input::Spawn { token_id: n(1), starting_job: 3 }).unwrap();
-    engine.apply(Input::DepositKek { token_id: n(1), amount: n(5) }).unwrap();
+    engine.apply(Input::DepositKek { token_id: n(1), amount: n(5), nonce: 1 }).unwrap();
     engine.apply(Input::WithdrawKek { token_id: n(1), amount: n(2) }).unwrap();
     assert_eq!(engine.state().get(&Key::Kek), n(3));
     assert_eq!(
@@ -118,8 +133,8 @@ fn withdraw_kek_reduces_balance_and_rejects_overspend() {
 fn escrowed_bid_counts_in_the_solvency_snapshot() {
     let ore = lok_engine::fungible_id("iron_ore");
     let mut world = spawn_pair();
-    world.append_import_item(n(1), ore, n(1)).unwrap();
-    world.append_deposit_kek(n(2), n(10)).unwrap();
+    import_item(&mut world, n(1), ore, n(1)).unwrap();
+    deposit(&mut world, n(2), n(10)).unwrap();
     world.append_list(n(1), n(1), ore, n(1)).unwrap();
     world.append_bid(n(1), n(2), n(6)).unwrap();
     assert_eq!(world.kek_balance(&n(2)), Some(n(4)));
@@ -134,6 +149,45 @@ fn escrowed_bid_counts_in_the_solvency_snapshot() {
     assert_eq!(world.solvency_kek(&n(2)), Some(n(6)), "escrowed bid is still owed by the vault");
     let snap = world.snapshots().into_iter().find(|s| s.token_id == n(2)).unwrap();
     assert_eq!(snap.solvency_kek, n(6));
+}
+
+
+#[test]
+fn deposit_nonce_rejects_replay_and_credits_two_nonces() {
+    let mut world = spawn_pair();
+    world.append_deposit_kek(n(1), n(4), 1).unwrap();
+    assert_eq!(
+        world.append_deposit_kek(n(1), n(4), 1).unwrap_err(),
+        EngineError::ReplayInbound
+    );
+    assert_eq!(world.kek_balance(&n(1)), Some(n(4)));
+    let len = world.character_len(&n(1)).unwrap();
+    assert_eq!(
+        world.append_deposit_kek(n(1), n(1), 3).unwrap_err(),
+        EngineError::ReplayInbound,
+        "a gap is not the next inbound"
+    );
+    assert_eq!(world.character_len(&n(1)), Some(len));
+    world.append_deposit_kek(n(1), n(6), 2).unwrap();
+    assert_eq!(world.kek_balance(&n(1)), Some(n(10)));
+    world.append_import_item(n(1), lok_engine::fungible_id("iron_ore"), n(2), 3).unwrap();
+    let cp = world.checkpoint_span(&n(1), world.character_len(&n(1)).unwrap()).unwrap();
+    assert_eq!(cp.inbound_consumed, 3, "checkpoint counts consumed inbounds, not a new set");
+    world.append_deposit_kek(n(2), n(1), 1).unwrap();
+    let cp2 = world.checkpoint_span(&n(2), world.character_len(&n(2)).unwrap()).unwrap();
+    assert_eq!(cp2.inbound_consumed, 1);
+    assert_eq!(world.inbound_applied(&n(1)), Some(3));
+    assert_eq!(world.inbound_applied(&n(2)), Some(1));
+
+    let mut engine = Engine::open(n(1), 3);
+    engine.apply(Input::Spawn { token_id: n(1), starting_job: 3 }).unwrap();
+    engine.apply(Input::DepositKek { token_id: n(1), amount: n(2), nonce: 1 }).unwrap();
+    assert_eq!(
+        engine.apply(Input::DepositKek { token_id: n(1), amount: n(2), nonce: 1 }).unwrap_err(),
+        EngineError::ReplayInbound
+    );
+    engine.apply(Input::DepositKek { token_id: n(1), amount: n(3), nonce: 2 }).unwrap();
+    assert_eq!(engine.state().get(&Key::Kek), n(5));
 }
 
 fn total_solvency(w: &World) -> U256 {
@@ -167,7 +221,7 @@ fn expected_total(w: &World) -> U256 {
 #[test]
 fn rebase_never_creates_kek_after_a_one_sided_commit() {
     let mut w = spawn_pair();
-    w.append_deposit_kek(n(1), n(10)).unwrap();
+    deposit(&mut w, n(1), n(10)).unwrap();
     w.commit_span(n(1), 2).unwrap();
     w.append_send_kek(n(1), n(2), n(4)).unwrap();
     w.commit_span(n(2), 2).unwrap();
@@ -179,8 +233,8 @@ fn rebase_never_creates_kek_after_a_one_sided_commit() {
 fn rebase_cascades_to_uncommitted_dependents_and_does_not_wedge() {
     let ore = lok_engine::fungible_id("iron_ore");
     let mut w = spawn_pair();
-    w.append_import_item(n(1), ore, n(1)).unwrap();
-    w.append_deposit_kek(n(2), n(10)).unwrap();
+    import_item(&mut w, n(1), ore, n(1)).unwrap();
+    deposit(&mut w, n(2), n(10)).unwrap();
     w.commit_span(n(1), 2).unwrap();
     w.commit_span(n(2), 2).unwrap();
     w.append_list(n(1), n(1), ore, n(1)).unwrap();
@@ -196,8 +250,8 @@ fn rebase_cascades_to_uncommitted_dependents_and_does_not_wedge() {
 fn rebase_keeps_the_list_when_a_bid_on_it_is_committed() {
     let ore = lok_engine::fungible_id("iron_ore");
     let mut w = spawn_pair();
-    w.append_import_item(n(1), ore, n(1)).unwrap();
-    w.append_deposit_kek(n(2), n(10)).unwrap();
+    import_item(&mut w, n(1), ore, n(1)).unwrap();
+    deposit(&mut w, n(2), n(10)).unwrap();
     w.commit_span(n(1), 2).unwrap();
     w.commit_span(n(2), 2).unwrap();
     w.append_list(n(1), n(1), ore, n(1)).unwrap();
@@ -234,9 +288,9 @@ fn random_ops_commits_and_rebases_conserve_kek_and_items() {
             }
             let amt = 1 + next(5);
             match next(12) {
-                0 => { let _ = w.append_deposit_kek(n(a), n(amt)); }
+                0 => { let _ = deposit(&mut w, n(a), n(amt)); }
                 1 => { let _ = w.append_withdraw_kek(n(a), n(amt)); }
-                2 => { let _ = w.append_import_item(n(a), ore, n(amt)); }
+                2 => { let _ = import_item(&mut w, n(a), ore, n(amt)); }
                 3 => { let _ = w.append_send_kek(n(a), n(b), n(amt)); }
                 4 => { let _ = w.append_send_item(n(a), n(b), ore, n(amt)); }
                 5 => { listing += 1; let _ = w.append_list(n(listing), n(a), ore, n(amt)); }

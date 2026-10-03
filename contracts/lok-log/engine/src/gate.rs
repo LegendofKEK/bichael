@@ -184,7 +184,7 @@ mod tests {
         let mut gate = Gate::open("").unwrap();
         assert!(apply(&mut gate, r#"{"op":"spawn","tokenId":"1","startingJob":0}"#)["ok"].as_bool().unwrap());
         assert!(apply(&mut gate, r#"{"op":"spawn","tokenId":"2","startingJob":1}"#)["ok"].as_bool().unwrap());
-        assert!(apply(&mut gate, r#"{"op":"importItem","tokenId":"1","itemId":"7","amount":"3"}"#)["ok"].as_bool().unwrap());
+        assert!(apply(&mut gate, r#"{"op":"importItem","tokenId":"1","itemId":"7","amount":"3","nonce":"1"}"#)["ok"].as_bool().unwrap());
         let sent = apply(&mut gate, r#"{"op":"sendItem","from":"1","to":"2","itemId":"7","amount":"2"}"#);
         assert_eq!(sent["ok"], true);
         let before = gate.len();
@@ -196,7 +196,7 @@ mod tests {
         assert_eq!(short["ok"], false);
         assert_eq!(gate.len(), before);
 
-        assert!(apply(&mut gate, r#"{"op":"depositKek","tokenId":"2","amount":"9"}"#)["ok"].as_bool().unwrap());
+        assert!(apply(&mut gate, r#"{"op":"depositKek","tokenId":"2","amount":"9","nonce":"1"}"#)["ok"].as_bool().unwrap());
         assert!(apply(&mut gate, r#"{"op":"list","listingId":"1","seller":"1","itemId":"7","amount":"1"}"#)["ok"].as_bool().unwrap());
         let low = apply(&mut gate, r#"{"op":"bid","listingId":"1","bidder":"2","amount":"3"}"#);
         assert_eq!(low["ok"], true);

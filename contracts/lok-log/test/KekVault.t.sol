@@ -113,6 +113,53 @@ contract KekVaultTest is Test {
         vault.claim(id);
     }
 
+    function test_withdraw_cannotExceedThatTokensDeposits() public {
+        kek.mint(other, 1000 ether);
+        vm.prank(other);
+        kek.approve(address(vault), type(uint256).max);
+        vault.deposit(other, 2, 1000 ether);
+        _deposit(10 ether);
+
+        vm.expectRevert(KekVault.ExceedsTokenDeposits.selector);
+        vault.queueWithdrawal(player, TOKEN, 11 ether);
+
+        uint256 id = vault.queueWithdrawal(player, TOKEN, 10 ether);
+        assertEq(id, 1);
+        assertEq(vault.reservedOf(TOKEN), 10 ether);
+        assertEq(vault.depositedOf(TOKEN), 10 ether);
+        // The other character's KEK is still in the vault, and this token is already at its cap.
+        vm.expectRevert(KekVault.ExceedsTokenDeposits.selector);
+        vault.queueWithdrawal(player, TOKEN, 1 ether);
+
+        vm.warp(block.timestamp + 24 hours);
+        vault.claim(id);
+        assertEq(vault.reservedOf(TOKEN), 10 ether, "a claimed withdrawal still counts against the cap");
+        vm.expectRevert(KekVault.ExceedsTokenDeposits.selector);
+        vault.queueWithdrawal(player, TOKEN, 1 ether);
+
+        uint256 otherId = vault.queueWithdrawal(other, 2, 1000 ether);
+        assertEq(otherId, 2);
+        assertEq(kek.balanceOf(address(vault)), 1000 ether);
+    }
+
+    function test_withdraw_cancelReleasesCap_restoreRechecksIt() public {
+        kek.mint(other, 50 ether);
+        vm.prank(other);
+        kek.approve(address(vault), type(uint256).max);
+        vault.deposit(other, 2, 50 ether);
+        _deposit(40 ether);
+
+        uint256 id = vault.queueWithdrawal(player, TOKEN, 40 ether);
+        vm.prank(guardian);
+        vault.cancel(id);
+        assertEq(vault.reservedOf(TOKEN), 0);
+
+        vault.queueWithdrawal(player, TOKEN, 40 ether);
+        vm.prank(admin);
+        vm.expectRevert(KekVault.ExceedsTokenDeposits.selector);
+        vault.restore(id);
+    }
+
     function test_withdraw_cannotQueueMoreThanVaultHolds_includingPending() public {
         _deposit(100 ether);
         vault.queueWithdrawal(player, TOKEN, 60 ether);

@@ -71,7 +71,7 @@ export const ClientMessageSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("party/leave") }),
   z.object({ type: z.literal("party/kick"), targetId: z.string().min(1).max(64) }),
   z.object({ type: z.literal("party/disband") }),
-  /** Move a held bag stack into the lok log. Not a KEK mint. */
+  /** Refused by the server. Item credits require a custody nonce the client cannot supply. Not a KEK mint. */
   z.object({
     type: z.literal("lok/import"),
     tokenId: z.number().int().positive(),

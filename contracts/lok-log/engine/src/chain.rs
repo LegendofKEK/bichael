@@ -259,6 +259,17 @@ fn parse_entries(value: &serde_json::Value, require_seq: bool) -> Result<Vec<Log
     Ok(entries)
 }
 
+fn req_u64(value: &serde_json::Value, key: &str) -> Result<u64, String> {
+    let raw = value.get(key).ok_or_else(|| format!("missing {key}"))?;
+    if let Some(n) = raw.as_u64() {
+        return Ok(n);
+    }
+    if let Some(s) = raw.as_str() {
+        return s.parse::<u64>().map_err(|_| format!("bad {key}"));
+    }
+    Err(format!("bad {key}"))
+}
+
 fn req_u256(value: &serde_json::Value, key: &str) -> Result<U256, String> {
     value
         .get(key)
@@ -289,11 +300,13 @@ pub(crate) fn parse_input(value: &serde_json::Value) -> Result<Input, String> {
         "depositKek" => Ok(Input::DepositKek {
             token_id: req_u256(value, "tokenId")?,
             amount: req_u256(value, "amount")?,
+            nonce: req_u64(value, "nonce")?,
         }),
         "importItem" => Ok(Input::ImportItem {
             token_id: req_u256(value, "tokenId")?,
             item_id: req_u256(value, "itemId")?,
             amount: req_u256(value, "amount")?,
+            nonce: req_u64(value, "nonce")?,
         }),
         "exportItem" => Ok(Input::ExportItem {
             token_id: req_u256(value, "tokenId")?,
@@ -363,16 +376,18 @@ pub(crate) fn input_to_json(input: &Input) -> serde_json::Value {
             "tokenId": token_id.to_dec(),
             "startingJob": starting_job,
         }),
-        Input::DepositKek { token_id, amount } => serde_json::json!({
+        Input::DepositKek { token_id, amount, nonce } => serde_json::json!({
             "type": "depositKek",
             "tokenId": s(token_id),
             "amount": s(amount),
+            "nonce": nonce.to_string(),
         }),
-        Input::ImportItem { token_id, item_id, amount } => serde_json::json!({
+        Input::ImportItem { token_id, item_id, amount, nonce } => serde_json::json!({
             "type": "importItem",
             "tokenId": s(token_id),
             "itemId": s(item_id),
             "amount": s(amount),
+            "nonce": nonce.to_string(),
         }),
         Input::ExportItem { token_id, item_id, amount } => serde_json::json!({
             "type": "exportItem",

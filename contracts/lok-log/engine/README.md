@@ -53,9 +53,9 @@ Exit 0 prints the head, state root, and summary. Exit 1 is a bad hash. Exit 2 is
 | Call | Event | Written onto |
 |---|---|---|
 | `append_spawn` | `spawn` | that character |
-| `append_deposit_kek` | `depositKek` (vault deposit already happened; not a mint) | that character |
+| `append_deposit_kek` | `depositKek` (vault deposit already happened; not a mint; `nonce` is the next inbound id) | that character |
 | `append_withdraw_kek` | `withdrawKek` (spendable only; not an onchain withdrawal) | that character |
-| `append_import_item` | `importItem` | that character |
+| `append_import_item` | `importItem` (same per-character inbound nonce sequence as `depositKek`) | that character |
 | `append_export_item` | `exportItem` (spendable balance only) | that character |
 | `append_send_item` | `sendItem` | sender and recipient |
 | `append_send_kek` | `sendKek` | sender and recipient |
@@ -100,4 +100,4 @@ Listing escrows the item out of the seller's spendable balance, so that quantity
 
 ## Left for the next slice
 
-Ruleset evaluation, XP / abilities / equipment inputs, Merkle proofs for the state root, and watching `KekVault` before appending `depositKek`. `checkpoint_span` drafts a per-character body (including `kekOut` from `WithdrawKek` in the span) but does not submit it. The server can append `depositKek` and `exportItem`. Player `lok/withdrawKek` is refused until a vault withdrawal is queued, so it cannot burn in-game KEK; the engine `WithdrawKek` op remains for that queue. The server does not follow Robinhood L2 unless `LOK_CHAIN_RPC` is set, and even then it does not submit or index chain transactions.
+Ruleset evaluation, XP / abilities / equipment inputs, Merkle proofs for the state root, and watching `KekVault` before appending `depositKek`. `checkpoint_span` drafts a per-character body (including `kekOut` from `WithdrawKek` in the span, and `inboundConsumed` equal to how many `depositKek` / `importItem` events that character's log has applied up to `toIndex`) but does not submit it. Those two events carry the chain inbound nonce and are accepted only in order, once. Replaying a nonce does not credit. The server appends them only for a custody nonce it has already recorded; the game client cannot. There is no client `lok/deposit`. Player `lok/import` does not move bag items, and `lok/withdrawKek` is refused until a vault withdrawal is queued, so it cannot burn in-game KEK; the engine `WithdrawKek` op remains for that queue. No KekVault watcher is wired. The server does not follow Robinhood L2 unless `LOK_CHAIN_RPC` is set, and even then it does not submit or index chain transactions.

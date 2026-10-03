@@ -5,5 +5,6 @@ interface IKekVault {
     /// Pull `amount` KEK from `from` into custody. BRIDGE_ROLE only (CharacterCheckpoint).
     function deposit(address from, uint256 tokenId, uint256 amount) external;
     /// Queue a delayed withdrawal for a checkpoint-attested KEK balance decrease. BRIDGE_ROLE only.
+    /// The queued amount, plus prior pending and claimed withdrawals for `tokenId`, cannot exceed that token's deposits.
     function queueWithdrawal(address to, uint256 tokenId, uint256 amount) external returns (uint256 id);
 }
