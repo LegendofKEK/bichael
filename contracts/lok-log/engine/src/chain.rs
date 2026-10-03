@@ -59,6 +59,8 @@ pub struct LogDocument {
 pub struct LoggedEntry {
     pub hash: [u8; 32],
     pub input: Input,
+    /// Global order shared by every character log that carries this payload. Not part of the hash.
+    pub seq: u64,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -83,8 +85,15 @@ pub enum ReplayStop {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct WorldDocument {
+pub struct CharacterLogDocument {
+    pub token_id: U256,
+    pub starting_job: u8,
     pub entries: Vec<LoggedEntry>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct WorldDocument {
+    pub characters: Vec<CharacterLogDocument>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -126,28 +135,12 @@ pub fn replay(doc: &LogDocument) -> Result<ReplayReport, ReplayStop> {
     })
 }
 
-/// Replay a world log from LOK_WORLD_V1 into a live `World`.
-/// A bad hash is not applied, and later events are not inspected.
+/// Replay per-character logs. A bad hash is not applied, and later events are not inspected.
 pub fn load_world(doc: &WorldDocument) -> Result<World, ReplayStop> {
-    let mut world = World::new();
-    for (i, entry) in doc.entries.iter().enumerate() {
-        let index = i as u64;
-        let computed = entry_hash(&world.head(), index, &entry.input);
-        if computed != entry.hash {
-            return Err(ReplayStop::BadHash {
-                index,
-                expected: entry.hash,
-                computed,
-            });
-        }
-        world
-            .apply(entry.input.clone())
-            .map_err(|reason| ReplayStop::Rejected { index, reason })?;
-    }
-    Ok(world)
+    World::load(doc)
 }
 
-/// Replay a world log from LOK_WORLD_V1. A bad hash is not applied, and later events are not inspected.
+/// Replay per-character logs. A bad hash is not applied, and later events are not inspected.
 pub fn replay_world(doc: &WorldDocument) -> Result<WorldReplayReport, ReplayStop> {
     let world = load_world(doc)?;
     Ok(WorldReplayReport {
@@ -181,7 +174,7 @@ pub fn parse_log(text: &str) -> Result<LogDocument, String> {
     if starting_job > u64::from(u8::MAX) {
         return Err("startingJob out of range".to_string());
     }
-    let entries = parse_entries(&value)?;
+    let entries = parse_entries(&value, false)?;
     Ok(LogDocument {
         token_id,
         starting_job: starting_job as u8,
@@ -191,22 +184,54 @@ pub fn parse_log(text: &str) -> Result<LogDocument, String> {
 
 pub fn parse_world_log(text: &str) -> Result<WorldDocument, String> {
     let value: serde_json::Value = serde_json::from_str(text).map_err(|e| e.to_string())?;
-    if value.get("type").and_then(|v| v.as_str()) != Some("world") {
-        return Err("not a world log".to_string());
+    match value.get("type").and_then(|v| v.as_str()) {
+        Some("characters") => parse_characters(&value),
+        Some("world") => {
+            let entries = value.get("entries").and_then(|v| v.as_array()).ok_or_else(|| "missing entries".to_string())?;
+            if entries.is_empty() {
+                Ok(WorldDocument { characters: Vec::new() })
+            } else {
+                Err("legacy world log cannot be split into per-character checkpoints".to_string())
+            }
+        }
+        _ => Err("not a character-log document".to_string()),
     }
-    Ok(WorldDocument { entries: parse_entries(&value)? })
+}
+
+fn parse_characters(value: &serde_json::Value) -> Result<WorldDocument, String> {
+    let arr = value
+        .get("characters")
+        .and_then(|v| v.as_array())
+        .ok_or_else(|| "missing characters".to_string())?;
+    let mut characters = Vec::with_capacity(arr.len());
+    for (i, ch) in arr.iter().enumerate() {
+        let token_id = req_u256(ch, "tokenId").map_err(|e| format!("character {i}: {e}"))?;
+        let starting_job = ch
+            .get("startingJob")
+            .and_then(|v| v.as_u64())
+            .ok_or_else(|| format!("character {i} missing startingJob"))?;
+        if starting_job > u64::from(u8::MAX) {
+            return Err(format!("character {i} startingJob out of range"));
+        }
+        let entries = parse_entries(ch, true).map_err(|e| format!("character {i}: {e}"))?;
+        characters.push(CharacterLogDocument {
+            token_id,
+            starting_job: starting_job as u8,
+            entries,
+        });
+    }
+    Ok(WorldDocument { characters })
 }
 
 pub fn parse_any_log(text: &str) -> Result<AnyLog, String> {
     let value: serde_json::Value = serde_json::from_str(text).map_err(|e| e.to_string())?;
-    if value.get("type").and_then(|v| v.as_str()) == Some("world") {
-        Ok(AnyLog::World(parse_world_log(text)?))
-    } else {
-        Ok(AnyLog::Character(parse_log(text)?))
+    match value.get("type").and_then(|v| v.as_str()) {
+        Some("characters") | Some("world") => Ok(AnyLog::World(parse_world_log(text)?)),
+        _ => Ok(AnyLog::Character(parse_log(text)?)),
     }
 }
 
-fn parse_entries(value: &serde_json::Value) -> Result<Vec<LoggedEntry>, String> {
+fn parse_entries(value: &serde_json::Value, require_seq: bool) -> Result<Vec<LoggedEntry>, String> {
     let arr = value
         .get("entries")
         .and_then(|v| v.as_array())
@@ -222,7 +247,14 @@ fn parse_entries(value: &serde_json::Value) -> Result<Vec<LoggedEntry>, String> 
             .get("input")
             .ok_or_else(|| format!("entry {i} missing input"))?;
         let input = parse_input(input_v).map_err(|e| format!("entry {i}: {e}"))?;
-        entries.push(LoggedEntry { hash, input });
+        let seq = if let Some(n) = ent.get("seq").and_then(|v| v.as_u64()) {
+            n
+        } else if require_seq {
+            return Err(format!("entry {i} missing seq"));
+        } else {
+            i as u64
+        };
+        entries.push(LoggedEntry { hash, input, seq });
     }
     Ok(entries)
 }
@@ -266,6 +298,10 @@ pub(crate) fn parse_input(value: &serde_json::Value) -> Result<Input, String> {
         "exportItem" => Ok(Input::ExportItem {
             token_id: req_u256(value, "tokenId")?,
             item_id: req_u256(value, "itemId")?,
+            amount: req_u256(value, "amount")?,
+        }),
+        "withdrawKek" => Ok(Input::WithdrawKek {
+            token_id: req_u256(value, "tokenId")?,
             amount: req_u256(value, "amount")?,
         }),
         "sendItem" => Ok(Input::SendItem {
@@ -342,6 +378,11 @@ pub(crate) fn input_to_json(input: &Input) -> serde_json::Value {
             "type": "exportItem",
             "tokenId": s(token_id),
             "itemId": s(item_id),
+            "amount": s(amount),
+        }),
+        Input::WithdrawKek { token_id, amount } => serde_json::json!({
+            "type": "withdrawKek",
+            "tokenId": s(token_id),
             "amount": s(amount),
         }),
         Input::SendItem { from, to, item_id, amount } => serde_json::json!({

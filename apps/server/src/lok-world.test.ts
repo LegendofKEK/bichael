@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtempSync } from "node:fs";
+import { mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -65,5 +65,44 @@ test("auction settle pays the high bid with no fee and replays after restart", (
   assert.equal(again.itemOf(b.tokenId, "7"), "1");
   assert.equal(again.kekOf(a.tokenId), "5");
   assert.equal(again.kekOf(b.tokenId), "4");
+  assert.equal(again.length, lok.length);
+});
+
+test("withdrawKek drops spendable balance and a transfer is stored on both logs", () => {
+  const dir = mkdtempSync(join(tmpdir(), "lok-withdraw-"));
+  const lok = LokWorld.open(dir, undefined, {});
+  const a = lok.spawn("char-a", "Ada", 0);
+  const b = lok.spawn("char-b", "Bea", 1);
+  assert.equal(a.ok && b.ok, true);
+  if (!a.ok || !b.ok) return;
+  assert.equal(lok.depositKek(a.tokenId, "10").ok, true);
+  assert.equal(lok.withdrawKek(a.tokenId, "4").ok, true);
+  assert.equal(lok.kekOf(a.tokenId), "6");
+  const len = lok.length;
+  const over = lok.withdrawKek(a.tokenId, "7");
+  assert.equal(over.ok, false);
+  if (!over.ok) assert.match(over.error, /insufficient/i);
+  assert.equal(lok.length, len);
+  assert.equal(lok.kekOf(a.tokenId), "6");
+  assert.equal(lok.sendKek(a.tokenId, b.tokenId, "2").ok, true);
+  assert.equal(lok.kekOf(a.tokenId), "4");
+  assert.equal(lok.kekOf(b.tokenId), "2");
+
+  const doc = JSON.parse(readFileSync(lok.logPath, "utf8")) as {
+    type: string;
+    characters: { tokenId: string; entries: { hash: string; input: { type: string } }[] }[];
+  };
+  assert.equal(doc.type, "characters");
+  const logA = doc.characters.find((c) => c.tokenId === a.tokenId);
+  const logB = doc.characters.find((c) => c.tokenId === b.tokenId);
+  const sendA = logA?.entries.find((e) => e.input.type === "sendKek");
+  const sendB = logB?.entries.find((e) => e.input.type === "sendKek");
+  assert.ok(sendA && sendB);
+  assert.notEqual(sendA.hash, sendB.hash);
+  assert.deepEqual(sendA.input, sendB.input);
+
+  const again = LokWorld.open(dir, undefined, {});
+  assert.equal(again.kekOf(a.tokenId), "4");
+  assert.equal(again.kekOf(b.tokenId), "2");
   assert.equal(again.length, lok.length);
 });

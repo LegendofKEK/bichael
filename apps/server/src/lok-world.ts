@@ -42,12 +42,12 @@ export function chainModeFromEnv(env: NodeJS.ProcessEnv = process.env): {
   if (!rpc) {
     return {
       chain: "engine-only",
-      note: "No LOK_CHAIN_RPC. KEK deposits and item exports stay engine events; Robinhood L2 is not queried and nothing is submitted.",
+      note: "No LOK_CHAIN_RPC. KEK deposits, KEK withdrawals, and item exports stay engine events; Robinhood L2 is not queried and nothing is submitted.",
     };
   }
   return {
     chain: "rpc-unwatched",
-    note: "LOK_CHAIN_RPC is set, but no KekVault watcher or export transaction is wired. Deposits and exports still only append the hash-chained log.",
+    note: "LOK_CHAIN_RPC is set, but no KekVault watcher or withdrawal transaction is wired. Deposits, withdrawals, and exports still only append the per-character logs.",
   };
 }
 
@@ -64,8 +64,9 @@ function asItemId(raw: string): number | null {
 }
 
 /**
- * One hash-chained world log. The wasm engine accepts or rejects every move.
+ * One hash chain per character. The wasm engine accepts or rejects every move.
  * Deposit credits KEK the caller already holds in custody. It does not mint.
+ * WithdrawKek decreases spendable KEK and does not submit an onchain withdrawal.
  */
 export class LokWorld {
   readonly logPath: string;
@@ -128,6 +129,11 @@ export class LokWorld {
 
   exportItem(tokenId: string, itemId: string, amount: string): LokResult {
     return this.apply({ op: "exportItem", tokenId, itemId, amount });
+  }
+
+  /** Drop spendable KEK on this character's log. Escrowed bids are not spendable. No chain transaction. */
+  withdrawKek(tokenId: string, amount: string): LokResult {
+    return this.apply({ op: "withdrawKek", tokenId, amount });
   }
 
   sendItem(from: string, to: string, itemId: string, amount: string): LokResult {

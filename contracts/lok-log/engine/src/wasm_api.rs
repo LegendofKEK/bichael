@@ -1,4 +1,4 @@
-//! C ABI for the game server. One wasm instance is one world log.
+//! C ABI for the game server. One wasm instance is the set of per-character logs.
 //! The server persists `lok_document` itself. No chain calls live here.
 
 use crate::gate::Gate;

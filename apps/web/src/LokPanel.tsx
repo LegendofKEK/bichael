@@ -40,8 +40,8 @@ export function LokPanel({ you, onClose }: Props) {
 
   const chainNote =
     lok.chain === "engine-only"
-      ? "KEK is deposit-only from Robinhood L2. No chain endpoint is configured, so vault deposits are not credited and export is not a withdrawal."
-      : "A chain endpoint is set, but this server is not watching the vault or submitting exports yet.";
+      ? "KEK is deposit-only from Robinhood L2. No chain endpoint is configured. Withdraw drops the in-game counter only; nothing is submitted onchain."
+      : "A chain endpoint is set, but this server is not watching the vault or submitting withdrawals yet.";
 
   return (
     <div className="cmd-panel lok-panel">
@@ -74,6 +74,13 @@ export function LokPanel({ you, onClose }: Props) {
           onClick={() => send({ type: "lok/sendKek", to, amount: kek })}
         >
           Send KEK
+        </button>
+        <button
+          type="button"
+          className="cmd-pill-tab"
+          onClick={() => send({ type: "lok/withdrawKek", amount: kek })}
+        >
+          Withdraw KEK
         </button>
       </div>
 

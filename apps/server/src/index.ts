@@ -537,6 +537,21 @@ function handleLokSendKek(p: Player, to: string, amount: string) {
   send(p.ws, snapshotFor(p));
 }
 
+function handleLokWithdrawKek(p: Player, amount: string) {
+  const token = lokToken(p);
+  if (!token) {
+    pushLog(p, "Could not open your log identity.");
+    return;
+  }
+  const res = lok.withdrawKek(token, amount);
+  if (!res.ok) {
+    pushLog(p, res.error);
+    return;
+  }
+  pushLog(p, "Withdrew " + amount + " KEK from the in-game counter. No chain withdrawal was submitted.");
+  send(p.ws, snapshotFor(p));
+}
+
 function handleLokList(p: Player, tokenId: number, amount: number) {
   const token = lokToken(p);
   if (!token) {
@@ -3808,6 +3823,9 @@ function onMessage(ws: WebSocket, data: string) {
       break;
     case "lok/sendKek":
       handleLokSendKek(p, msg.to, msg.amount);
+      break;
+    case "lok/withdrawKek":
+      handleLokWithdrawKek(p, msg.amount);
       break;
     case "lok/list":
       handleLokList(p, msg.tokenId, msg.amount);

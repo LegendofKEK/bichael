@@ -1,37 +1,32 @@
-//! In-memory world log the game server drives.
+//! In-memory per-character logs the game server drives.
 //!
 //! Commands are one JSON object. A rejected command does not append.
-//! `open` replays a world document and stops at the first bad hash.
+//! `open` replays a character-log document and stops at the first bad hash.
+//! An empty legacy `{"type":"world","entries":[]}` file still opens.
 
 use serde_json::{json, Value};
 
-use crate::chain::{input_to_json, load_world, parse_input, parse_world_log, replay_stop_message, LoggedEntry};
+use crate::chain::{input_to_json, load_world, parse_input, parse_world_log, replay_stop_message};
 use crate::engine::EngineError;
 use crate::event::Input;
+use crate::u256::U256;
 use crate::world::World;
 
 pub struct Gate {
     world: World,
-    log: Vec<LoggedEntry>,
 }
 
 impl Gate {
-    /// Empty text opens a fresh world. Any other text must be a world log.
+    /// Empty text opens a fresh world. Any other text must be per-character logs.
     /// A bad hash is not applied, and the gate refuses to open.
     pub fn open(text: &str) -> Result<Self, String> {
         let trimmed = text.trim();
         if trimmed.is_empty() {
-            return Ok(Self {
-                world: World::new(),
-                log: Vec::new(),
-            });
+            return Ok(Self { world: World::new() });
         }
         let doc = parse_world_log(trimmed)?;
         let world = load_world(&doc).map_err(|stop| replay_stop_message(&stop))?;
-        Ok(Self {
-            world,
-            log: doc.entries,
-        })
+        Ok(Self { world })
     }
 
     pub fn len(&self) -> u64 {
@@ -39,12 +34,19 @@ impl Gate {
     }
 
     pub fn document_json(&self) -> String {
-        let entries: Vec<Value> = self.log.iter().map(entry_json).collect();
+        let characters: Vec<Value> = self.world.to_document().characters.into_iter().map(|character| {
+            let entries: Vec<Value> = character.entries.iter().map(entry_json).collect();
+            json!({
+                "tokenId": character.token_id.to_dec(),
+                "startingJob": character.starting_job,
+                "entries": entries,
+            })
+        }).collect();
         serde_json::to_string_pretty(&json!({
-            "type": "world",
-            "entries": entries,
+            "type": "characters",
+            "characters": characters,
         }))
-        .unwrap_or_else(|_| "{\"type\":\"world\",\"entries\":[]}".to_string())
+        .unwrap_or_else(|_| "{\"type\":\"characters\",\"characters\":[]}".to_string())
     }
 
     /// Apply one command. Engine rejection returns `{"ok":false,...}` and does not append.
@@ -65,15 +67,17 @@ impl Gate {
             Err(err) => return fail(&err),
         };
         match self.world.apply(input.clone()) {
-            Ok(outcome) => {
-                let hash = match outcome {
-                    crate::event::Outcome::Applied { entry_hash, .. } => entry_hash,
-                };
-                self.log.push(LoggedEntry { hash, input });
-                let entry = entry_json(self.log.last().expect("just pushed"));
+            Ok(event) => {
+                let links: Vec<Value> = event.links.iter().map(|link| json!({
+                    "tokenId": link.token_id.to_dec(),
+                    "index": link.index,
+                    "hash": hex32(&link.entry_hash),
+                })).collect();
                 let mut body = state_body(&self.world);
                 body.insert("ok".into(), json!(true));
-                body.insert("entry".into(), entry);
+                body.insert("seq".into(), json!(event.seq));
+                body.insert("links".into(), json!(links));
+                body.insert("entry".into(), json!({ "seq": event.seq, "links": links }));
                 serde_json::to_string(&Value::Object(body)).unwrap_or_else(|_| fail("encode"))
             }
             Err(err) => fail(&engine_error(&err)),
@@ -91,8 +95,9 @@ fn command_to_input(value: &Value, op: &str) -> Result<Input, String> {
     parse_input(&Value::Object(obj))
 }
 
-fn entry_json(entry: &LoggedEntry) -> Value {
+fn entry_json(entry: &crate::chain::LoggedEntry) -> Value {
     json!({
+        "seq": entry.seq,
         "hash": hex32(&entry.hash),
         "input": input_to_json(&entry.input),
     })
@@ -100,6 +105,10 @@ fn entry_json(entry: &LoggedEntry) -> Value {
 
 fn hex32(bytes: &[u8; 32]) -> String {
     format!("0x{}", hex::encode(bytes))
+}
+
+fn self_log_len(world: &World, token_id: &U256) -> u64 {
+    world.character_len(token_id).unwrap_or(0)
 }
 
 fn engine_error(err: &EngineError) -> String {
@@ -132,6 +141,9 @@ fn state_body(world: &World) -> serde_json::Map<String, Value> {
         characters.push(json!({
             "tokenId": snap.token_id.to_dec(),
             "kek": snap.kek.to_dec(),
+            "solvencyKek": snap.solvency_kek.to_dec(),
+            "logLen": self_log_len(world, &snap.token_id),
+            "logHead": hex32(&world.character_head(&snap.token_id).unwrap_or([0u8; 32])),
             "items": items,
         }));
     }
@@ -215,7 +227,6 @@ mod tests {
     fn apply_state(gate: &Gate) -> serde_json::Value {
         let mut cloned = Gate {
             world: gate.world.clone(),
-            log: gate.log.clone(),
         };
         serde_json::from_str(&cloned.apply_command(r#"{"op":"state"}"#)).unwrap()
     }
@@ -225,7 +236,7 @@ mod tests {
         let mut gate = Gate::open("").unwrap();
         apply(&mut gate, r#"{"op":"spawn","tokenId":"1","startingJob":0}"#);
         let mut doc: serde_json::Value = serde_json::from_str(&gate.document_json()).unwrap();
-        doc["entries"][0]["hash"] = serde_json::json!("0x0000000000000000000000000000000000000000000000000000000000000000");
+        doc["characters"][0]["entries"][0]["hash"] = serde_json::json!("0x0000000000000000000000000000000000000000000000000000000000000000");
         match Gate::open(&doc.to_string()) {
             Err(err) => assert!(err.contains("bad hash"), "{err}"),
             Ok(_) => panic!("bad hash was applied"),
