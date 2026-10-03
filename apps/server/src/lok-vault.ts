@@ -89,6 +89,39 @@ function sendArgs(to: string, sig: string, args: string[], rpc: string, key: str
   return out;
 }
 
+export const LOCAL_ANVIL_CHAIN_ID = 31337n;
+/** Anvil's first default MockKEK. Player deposits refuse any other token, including real KEK. */
+export const LOCAL_MOCK_KEK = "0x5FbDB2315678afecb367f032d93F642f64180aa3";
+/** Per player-initiated deposit. Local test only. */
+export const PLAYER_DEPOSIT_CAP = 10_000n;
+export const PLAYER_DEPOSIT_GAP_MS = 10_000;
+
+const nextPlayerDeposit = new Map<string, number>();
+
+export function playerDepositGate(input: {
+  chainId: bigint;
+  token: string;
+  amount: bigint;
+}): { ok: true } | { ok: false; error: string } {
+  if (input.chainId !== LOCAL_ANVIL_CHAIN_ID) {
+    return { ok: false, error: "Deposits are only available on local chain 31337. Nothing was minted." };
+  }
+  if (input.token.toLowerCase() !== LOCAL_MOCK_KEK.toLowerCase()) {
+    return { ok: false, error: "Deposits are only available for the local MockKEK token. Nothing was minted." };
+  }
+  if (input.amount <= 0n || input.amount > PLAYER_DEPOSIT_CAP) {
+    return { ok: false, error: "Deposit cap is " + PLAYER_DEPOSIT_CAP.toString() + " KEK. Nothing was minted." };
+  }
+  return { ok: true };
+}
+
+export function allowPlayerDeposit(tokenId: string, now: number): { ok: true } | { ok: false; error: string } {
+  const at = nextPlayerDeposit.get(tokenId) ?? 0;
+  if (now < at) return { ok: false, error: "Wait a moment before depositing again. Nothing was minted." };
+  nextPlayerDeposit.set(tokenId, now + PLAYER_DEPOSIT_GAP_MS);
+  return { ok: true };
+}
+
 /** Approve the vault and deposit. Never mints. */
 export function depositCastArgs(env: Env, tokenId: string, amount: string): string[][] {
   return [
@@ -192,11 +225,23 @@ export async function depositKekOnchain(
     return { ok: false, error: "Deposit is not configured on this server. Nothing was minted." };
   }
   if (!/^[1-9][0-9]{0,18}$/.test(amount)) return { ok: false, error: "Bad deposit amount." };
+  const amountN = BigInt(amount);
+  if (env.kek.toLowerCase() !== LOCAL_MOCK_KEK.toLowerCase()) {
+    return { ok: false, error: "Deposits are only available for the local MockKEK token. Nothing was minted." };
+  }
+  if (amountN > PLAYER_DEPOSIT_CAP) {
+    return { ok: false, error: "Deposit cap is " + PLAYER_DEPOSIT_CAP.toString() + " KEK. Nothing was minted." };
+  }
   try {
+    const chainRaw = word((await cast(["chain-id", "--rpc-url", env.rpc])).stdout);
+    const gate = playerDepositGate({ chainId: BigInt(chainRaw), token: env.kek, amount: amountN });
+    if (!gate.ok) return gate;
+    const paced = allowPlayerDeposit(tokenId, Date.now());
+    if (!paced.ok) return paced;
     const balance = BigInt(await call(cast, env.rpc, env.kek, "balanceOf(address)(uint256)", [
       await ownerAddress(cast, env.ownerKey),
     ]));
-    if (balance < BigInt(amount)) {
+    if (balance < amountN) {
       return { ok: false, error: "The local depositor does not have enough MockKEK. Nothing was minted." };
     }
     for (const args of depositCastArgs(env, tokenId, amount)) {

@@ -3,7 +3,7 @@ import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
-import { applyKekDeposit, decodeKekDeposit, loadLokEnv } from "./lok-chain";
+import { applyKekDeposit, decodeKekDeposit, depositCursorPath, loadLokEnv, readDepositCursor, scanKekDeposits, writeDepositCursor } from "./lok-chain";
 import { chainModeFromEnv, LokWorld } from "./lok-world";
 
 const SAMPLE = {
@@ -51,4 +51,43 @@ test("loadLokEnv fills blanks and does not override", () => {
   loadLokEnv(env, [file]);
   assert.equal(env.LOK_CHAIN_RPC, "http://127.0.0.1:8545");
   assert.equal(env.LOK_KEK, "0xkeep");
+});
+
+test("a consumed nonce does not freeze the deposit cursor", async () => {
+  const next = await scanKekDeposits({
+    cursor: 0n,
+    checkpoint: "0xabc",
+    rpcCall: async (method) => {
+      if (method === "eth_blockNumber") return "0x14";
+      if (method === "eth_getLogs") return [{ ...SAMPLE, blockNumber: "0x10", logIndex: "0x0" }];
+      throw new Error(method);
+    },
+    apply: () => ({ ok: false, error: "inbound nonce was already consumed or is out of order" }),
+  });
+  assert.equal(next.cursor, 19n);
+});
+
+test("a restart resumes from the persisted deposit cursor", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "lok-cursor-"));
+  const path = depositCursorPath(dir);
+  writeDepositCursor(path, 40n);
+  assert.equal(readDepositCursor(path), 40n);
+  let fromBlock = "";
+  const next = await scanKekDeposits({
+    cursor: readDepositCursor(path),
+    checkpoint: "0xabc",
+    rpcCall: async (method, params) => {
+      if (method === "eth_blockNumber") return "0x30";
+      if (method === "eth_getLogs") {
+        fromBlock = (params[0] as { fromBlock: string }).fromBlock;
+        return [];
+      }
+      throw new Error(method);
+    },
+    apply: () => ({ ok: true }),
+  });
+  assert.equal(fromBlock, "0x28");
+  assert.equal(next.cursor, 47n);
+  writeDepositCursor(path, next.cursor);
+  assert.equal(readDepositCursor(path), 47n);
 });
