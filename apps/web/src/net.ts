@@ -204,6 +204,7 @@ export function connectSocket() {
         subjobMode: msg.subjobMode,
         subLevel: msg.subLevel,
         craftOpen: msg.craftOpen,
+        lokOpen: msg.lokOpen,
       });
     }
   });

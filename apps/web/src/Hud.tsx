@@ -22,6 +22,7 @@ import { useEffect, useMemo, useRef, useState, type DragEvent, type FormEvent } 
 import { AbilityIcon } from "./AbilityIcon";
 import { chromaKeyIconUrl } from "./chroma";
 import { CraftingPanel } from "./CraftingPanel";
+import { LokPanel } from "./LokPanel";
 import { PartyPanel } from "./PartyPanel";
 import { EquipPanel } from "./EquipPanel";
 import { SkillTreePanel } from "./SkillTreePanel";
@@ -557,6 +558,7 @@ export function Hud() {
   });
   const [bagOpen, setBagOpen] = useState(false);
   const [craftOpen, setCraftOpen] = useState(false);
+  const [lokOpen, setLokOpen] = useState(false);
   const [bookOpen, setBookOpen] = useState(false);
   const [treeOpen, setTreeOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -574,19 +576,26 @@ export function Hud() {
     const onToggle = () => setBagOpen((v) => !v);
     const onBook = () => setBookOpen((v) => !v);
     const onCraft = () => setCraftOpen((v) => !v);
+    const onLok = () => setLokOpen((v) => !v);
     window.addEventListener("bellgrave:toggle-bag", onToggle);
     window.addEventListener("bellgrave:toggle-spellbook", onBook);
     window.addEventListener("bellgrave:toggle-craft", onCraft);
+    window.addEventListener("bellgrave:toggle-lok", onLok);
     return () => {
       window.removeEventListener("bellgrave:toggle-bag", onToggle);
       window.removeEventListener("bellgrave:toggle-spellbook", onBook);
       window.removeEventListener("bellgrave:toggle-craft", onCraft);
+      window.removeEventListener("bellgrave:toggle-lok", onLok);
     };
   }, []);
 
   useEffect(() => {
     if (npcDialog?.craftOpen) setCraftOpen(true);
   }, [npcDialog?.craftOpen, npcDialog?.npcId]);
+
+  useEffect(() => {
+    if (npcDialog?.lokOpen) setLokOpen(true);
+  }, [npcDialog?.lokOpen, npcDialog?.npcId]);
 
   useEffect(() => {
     logEnd.current?.scrollIntoView({ behavior: "smooth" });
@@ -854,6 +863,7 @@ export function Hud() {
 
       {bagOpen && <EquipPanel you={you} me={me} onClose={() => setBagOpen(false)} />}
       {craftOpen && <CraftingPanel you={you} onClose={() => setCraftOpen(false)} />}
+      {lokOpen && <LokPanel you={you} onClose={() => setLokOpen(false)} />}
       {treeOpen && <SkillTreePanel onClose={() => setTreeOpen(false)} />}
       {!partyOpen && snapshot?.partyInvite && (
         <div className="party-invite-toast" role="status">

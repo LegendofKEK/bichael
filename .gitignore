@@ -13,3 +13,4 @@ broadcast
 tmp/
 *.LOCK.bak.png
 __pycache__/
+apps/server/data/

@@ -1,0 +1,69 @@
+import assert from "node:assert/strict";
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import test from "node:test";
+import { LokWorld } from "./lok-world";
+
+function world() {
+  const dir = mkdtempSync(join(tmpdir(), "lok-world-"));
+  return LokWorld.open(dir, undefined, {});
+}
+
+test("item transfer is logged and a short or self send is rejected", () => {
+  const lok = world();
+  const a = lok.spawn("char-a", "Ada", 0);
+  const b = lok.spawn("char-b", "Bea", 1);
+  assert.equal(a.ok, true);
+  assert.equal(b.ok, true);
+  if (!a.ok || !b.ok) return;
+  assert.equal(lok.importItem(a.tokenId, "7", "3").ok, true);
+  assert.equal(lok.sendItem(a.tokenId, b.tokenId, "7", "2").ok, true);
+  assert.equal(lok.itemOf(a.tokenId, "7"), "1");
+  assert.equal(lok.itemOf(b.tokenId, "7"), "2");
+  const len = lok.length;
+  const self = lok.sendItem(a.tokenId, a.tokenId, "7", "1");
+  assert.equal(self.ok, false);
+  if (!self.ok) assert.match(self.error, /self/i);
+  const short = lok.sendItem(a.tokenId, b.tokenId, "7", "5");
+  assert.equal(short.ok, false);
+  if (!short.ok) assert.match(short.error, /insufficient/i);
+  assert.equal(lok.length, len);
+  assert.equal(lok.itemOf(a.tokenId, "7"), "1");
+  assert.equal(lok.itemOf(b.tokenId, "7"), "2");
+});
+
+test("auction settle pays the high bid with no fee and replays after restart", () => {
+  const dir = mkdtempSync(join(tmpdir(), "lok-auction-"));
+  const lok = LokWorld.open(dir, undefined, {});
+  const a = lok.spawn("char-a", "Ada", 0);
+  const b = lok.spawn("char-b", "Bea", 1);
+  assert.equal(a.ok && b.ok, true);
+  if (!a.ok || !b.ok) return;
+  assert.equal(lok.importItem(a.tokenId, "7", "1").ok, true);
+  // Custody credit, not a faucet: the test stands in for a vault deposit the server was told already happened.
+  assert.equal(lok.depositKek(b.tokenId, "9").ok, true);
+  const listed = lok.list(a.tokenId, "7", "1");
+  assert.equal(listed.ok, true);
+  if (!listed.ok || !listed.listingId) return;
+  assert.equal(lok.itemOf(a.tokenId, "7"), "0");
+  assert.equal(lok.bid(listed.listingId, b.tokenId, "3").ok, true);
+  const low = lok.bid(listed.listingId, b.tokenId, "2");
+  assert.equal(low.ok, false);
+  assert.equal(lok.bid(listed.listingId, b.tokenId, "5").ok, true);
+  assert.equal(lok.kekOf(b.tokenId), "4");
+  const cancel = lok.cancel(listed.listingId, b.tokenId);
+  assert.equal(cancel.ok, false);
+  if (!cancel.ok) assert.match(cancel.error, /seller/i);
+  assert.equal(lok.settle(listed.listingId).ok, true);
+  assert.equal(lok.itemOf(b.tokenId, "7"), "1");
+  assert.equal(lok.kekOf(a.tokenId), "5");
+  assert.equal(lok.kekOf(b.tokenId), "4");
+  assert.equal(lok.view(a.tokenId).listings.length, 0);
+
+  const again = LokWorld.open(dir, undefined, {});
+  assert.equal(again.itemOf(b.tokenId, "7"), "1");
+  assert.equal(again.kekOf(a.tokenId), "5");
+  assert.equal(again.kekOf(b.tokenId), "4");
+  assert.equal(again.length, lok.length);
+});

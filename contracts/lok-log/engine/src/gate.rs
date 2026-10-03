@@ -1,0 +1,234 @@
+//! In-memory world log the game server drives.
+//!
+//! Commands are one JSON object. A rejected command does not append.
+//! `open` replays a world document and stops at the first bad hash.
+
+use serde_json::{json, Value};
+
+use crate::chain::{input_to_json, load_world, parse_input, parse_world_log, replay_stop_message, LoggedEntry};
+use crate::engine::EngineError;
+use crate::event::Input;
+use crate::world::World;
+
+pub struct Gate {
+    world: World,
+    log: Vec<LoggedEntry>,
+}
+
+impl Gate {
+    /// Empty text opens a fresh world. Any other text must be a world log.
+    /// A bad hash is not applied, and the gate refuses to open.
+    pub fn open(text: &str) -> Result<Self, String> {
+        let trimmed = text.trim();
+        if trimmed.is_empty() {
+            return Ok(Self {
+                world: World::new(),
+                log: Vec::new(),
+            });
+        }
+        let doc = parse_world_log(trimmed)?;
+        let world = load_world(&doc).map_err(|stop| replay_stop_message(&stop))?;
+        Ok(Self {
+            world,
+            log: doc.entries,
+        })
+    }
+
+    pub fn len(&self) -> u64 {
+        self.world.len()
+    }
+
+    pub fn document_json(&self) -> String {
+        let entries: Vec<Value> = self.log.iter().map(entry_json).collect();
+        serde_json::to_string_pretty(&json!({
+            "type": "world",
+            "entries": entries,
+        }))
+        .unwrap_or_else(|_| "{\"type\":\"world\",\"entries\":[]}".to_string())
+    }
+
+    /// Apply one command. Engine rejection returns `{"ok":false,...}` and does not append.
+    pub fn apply_command(&mut self, text: &str) -> String {
+        let value: Value = match serde_json::from_str(text) {
+            Ok(v) => v,
+            Err(err) => return fail(&format!("bad json: {err}")),
+        };
+        let op = match value.get("op").and_then(|v| v.as_str()) {
+            Some(op) => op,
+            None => return fail("missing op"),
+        };
+        if op == "state" {
+            return ok_state(&self.world);
+        }
+        let input = match command_to_input(&value, op) {
+            Ok(input) => input,
+            Err(err) => return fail(&err),
+        };
+        match self.world.apply(input.clone()) {
+            Ok(outcome) => {
+                let hash = match outcome {
+                    crate::event::Outcome::Applied { entry_hash, .. } => entry_hash,
+                };
+                self.log.push(LoggedEntry { hash, input });
+                let entry = entry_json(self.log.last().expect("just pushed"));
+                let mut body = state_body(&self.world);
+                body.insert("ok".into(), json!(true));
+                body.insert("entry".into(), entry);
+                serde_json::to_string(&Value::Object(body)).unwrap_or_else(|_| fail("encode"))
+            }
+            Err(err) => fail(&engine_error(&err)),
+        }
+    }
+}
+
+fn command_to_input(value: &Value, op: &str) -> Result<Input, String> {
+    let mut obj = value
+        .as_object()
+        .cloned()
+        .ok_or_else(|| "command must be an object".to_string())?;
+    obj.remove("op");
+    obj.insert("type".to_string(), Value::String(op.to_string()));
+    parse_input(&Value::Object(obj))
+}
+
+fn entry_json(entry: &LoggedEntry) -> Value {
+    json!({
+        "hash": hex32(&entry.hash),
+        "input": input_to_json(&entry.input),
+    })
+}
+
+fn hex32(bytes: &[u8; 32]) -> String {
+    format!("0x{}", hex::encode(bytes))
+}
+
+fn engine_error(err: &EngineError) -> String {
+    err.to_string()
+}
+
+fn fail(message: &str) -> String {
+    json!({ "ok": false, "error": message }).to_string()
+}
+
+fn ok_state(world: &World) -> String {
+    let mut body = state_body(world);
+    body.insert("ok".into(), json!(true));
+    serde_json::to_string(&Value::Object(body)).unwrap_or_else(|_| fail("encode"))
+}
+
+fn state_body(world: &World) -> serde_json::Map<String, Value> {
+    let mut characters = Vec::new();
+    for snap in world.snapshots() {
+        let items: Vec<Value> = world
+            .spendable_items(&snap.token_id)
+            .into_iter()
+            .map(|(item_id, amount)| {
+                json!({
+                    "itemId": item_id.to_dec(),
+                    "amount": amount.to_dec(),
+                })
+            })
+            .collect();
+        characters.push(json!({
+            "tokenId": snap.token_id.to_dec(),
+            "kek": snap.kek.to_dec(),
+            "items": items,
+        }));
+    }
+    let mut listings = Vec::new();
+    for listing in world.listings() {
+        listings.push(json!({
+            "id": listing.id.to_dec(),
+            "seller": listing.seller.to_dec(),
+            "itemId": listing.item_id.to_dec(),
+            "amount": listing.amount.to_dec(),
+            "highBidder": listing.high_bidder.map(|id| id.to_dec()),
+            "highBid": listing.high_bid.to_dec(),
+        }));
+    }
+    let mut map = serde_json::Map::new();
+    map.insert("len".to_string(), json!(world.len()));
+    map.insert("head".to_string(), json!(hex32(&world.head())));
+    map.insert(
+        "state".to_string(),
+        json!({
+            "characters": characters,
+            "listings": listings,
+        }),
+    );
+    map
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Gate;
+
+    fn apply(gate: &mut Gate, cmd: &str) -> serde_json::Value {
+        serde_json::from_str(&gate.apply_command(cmd)).expect("json")
+    }
+
+    #[test]
+    fn transfer_and_settle_round_trip() {
+        let mut gate = Gate::open("").unwrap();
+        assert!(apply(&mut gate, r#"{"op":"spawn","tokenId":"1","startingJob":0}"#)["ok"].as_bool().unwrap());
+        assert!(apply(&mut gate, r#"{"op":"spawn","tokenId":"2","startingJob":1}"#)["ok"].as_bool().unwrap());
+        assert!(apply(&mut gate, r#"{"op":"importItem","tokenId":"1","itemId":"7","amount":"3"}"#)["ok"].as_bool().unwrap());
+        let sent = apply(&mut gate, r#"{"op":"sendItem","from":"1","to":"2","itemId":"7","amount":"2"}"#);
+        assert_eq!(sent["ok"], true);
+        let before = gate.len();
+        let rejected = apply(&mut gate, r#"{"op":"sendItem","from":"1","to":"1","itemId":"7","amount":"1"}"#);
+        assert_eq!(rejected["ok"], false);
+        assert!(rejected["error"].as_str().unwrap().contains("self"));
+        assert_eq!(gate.len(), before);
+        let short = apply(&mut gate, r#"{"op":"sendItem","from":"1","to":"2","itemId":"7","amount":"5"}"#);
+        assert_eq!(short["ok"], false);
+        assert_eq!(gate.len(), before);
+
+        assert!(apply(&mut gate, r#"{"op":"depositKek","tokenId":"2","amount":"9"}"#)["ok"].as_bool().unwrap());
+        assert!(apply(&mut gate, r#"{"op":"list","listingId":"1","seller":"1","itemId":"7","amount":"1"}"#)["ok"].as_bool().unwrap());
+        let low = apply(&mut gate, r#"{"op":"bid","listingId":"1","bidder":"2","amount":"3"}"#);
+        assert_eq!(low["ok"], true);
+        let not_higher = apply(&mut gate, r#"{"op":"bid","listingId":"1","bidder":"2","amount":"2"}"#);
+        assert_eq!(not_higher["ok"], false);
+        assert_eq!(gate.len(), before + 3);
+        let higher = apply(&mut gate, r#"{"op":"bid","listingId":"1","bidder":"2","amount":"5"}"#);
+        assert_eq!(higher["ok"], true);
+        let not_seller = apply(&mut gate, r#"{"op":"cancel","listingId":"1","seller":"2"}"#);
+        assert_eq!(not_seller["ok"], false);
+        let settled = apply(&mut gate, r#"{"op":"settle","listingId":"1"}"#);
+        assert_eq!(settled["ok"], true);
+
+        let doc = gate.document_json();
+        let again = Gate::open(&doc).unwrap();
+        let state = apply_state(&again);
+        let chars = state["state"]["characters"].as_array().unwrap();
+        let a = chars.iter().find(|c| c["tokenId"] == "1").unwrap();
+        let b = chars.iter().find(|c| c["tokenId"] == "2").unwrap();
+        assert_eq!(a["kek"], "5");
+        assert_eq!(b["kek"], "4");
+        assert!(a["items"].as_array().unwrap().is_empty());
+        assert_eq!(b["items"][0]["itemId"], "7");
+        assert_eq!(b["items"][0]["amount"], "3");
+        assert!(state["state"]["listings"].as_array().unwrap().is_empty());
+    }
+
+    fn apply_state(gate: &Gate) -> serde_json::Value {
+        let mut cloned = Gate {
+            world: gate.world.clone(),
+            log: gate.log.clone(),
+        };
+        serde_json::from_str(&cloned.apply_command(r#"{"op":"state"}"#)).unwrap()
+    }
+
+    #[test]
+    fn bad_hash_refuses_to_open() {
+        let mut gate = Gate::open("").unwrap();
+        apply(&mut gate, r#"{"op":"spawn","tokenId":"1","startingJob":0}"#);
+        let mut doc: serde_json::Value = serde_json::from_str(&gate.document_json()).unwrap();
+        doc["entries"][0]["hash"] = serde_json::json!("0x0000000000000000000000000000000000000000000000000000000000000000");
+        match Gate::open(&doc.to_string()) {
+            Err(err) => assert!(err.contains("bad hash"), "{err}"),
+            Ok(_) => panic!("bad hash was applied"),
+        }
+    }
+}

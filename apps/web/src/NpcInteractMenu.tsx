@@ -170,6 +170,18 @@ export function NpcInteractMenu() {
             Open Crafting
           </button>
         )}
+        {dialog.lokOpen && (
+          <button
+            type="button"
+            className="boot-primary"
+            onClick={() => {
+              window.dispatchEvent(new CustomEvent("bellgrave:toggle-lok"));
+              close();
+            }}
+          >
+            Open Exchange
+          </button>
+        )}
         <button type="button" className="boot-primary" onClick={close}>
           Close
         </button>

@@ -6,6 +6,9 @@ description = "Bellgrave lok engine: state, hash-chained log, item and KEK trans
 license = "MIT"
 publish = false
 
+[lib]
+crate-type = ["rlib", "cdylib"]
+
 [[bin]]
 name = "lok-replay"
 path = "src/bin/lok-replay.rs"

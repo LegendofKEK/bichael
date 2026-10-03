@@ -3267,3 +3267,37 @@ button.equip-stat-label:focus-visible {
   font-family: var(--ui-font);
   font-size: 13px;
 }
+
+.lok-panel {
+  pointer-events: auto;
+  position: absolute;
+  top: 72px;
+  right: 12px;
+  width: 460px;
+  max-width: calc(100vw - 24px);
+  max-height: calc(100vh - 160px);
+  overflow: auto;
+  padding: 16px 16px 18px;
+  z-index: 50;
+}
+.lok-note {
+  margin: 0 0 8px;
+  font-size: 12px;
+  color: var(--cmd-text-muted);
+}
+.lok-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  margin: 4px 0;
+}
+.lok-row input {
+  flex: 1;
+  min-width: 72px;
+  background: transparent;
+  color: inherit;
+  border: 1px solid var(--cmd-panel-edge);
+  border-radius: 6px;
+  padding: 4px 6px;
+}

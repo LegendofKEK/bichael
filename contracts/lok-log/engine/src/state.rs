@@ -85,6 +85,17 @@ impl State {
     pub fn root(&self) -> [u8; 32] {
         commit_map(&self.map)
     }
+
+    /// Spendable item rows. Zero balances are not stored.
+    pub fn items(&self) -> Vec<(U256, U256)> {
+        self.map
+            .iter()
+            .filter_map(|(key, amount)| match key {
+                Key::Item(id) => Some((*id, *amount)),
+                _ => None,
+            })
+            .collect()
+    }
 }
 
 fn key_tag(key: &Key) -> u8 {

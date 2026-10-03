@@ -71,6 +71,47 @@ export const ClientMessageSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("party/leave") }),
   z.object({ type: z.literal("party/kick"), targetId: z.string().min(1).max(64) }),
   z.object({ type: z.literal("party/disband") }),
+  /** Move a held bag stack into the lok log. Not a KEK mint. */
+  z.object({
+    type: z.literal("lok/import"),
+    tokenId: z.number().int().positive(),
+    amount: z.number().int().positive().max(1_000_000),
+  }),
+  /** Spend spendable log items back into the bag. Not a chain withdrawal. */
+  z.object({
+    type: z.literal("lok/export"),
+    tokenId: z.number().int().positive(),
+    amount: z.number().int().positive().max(1_000_000),
+  }),
+  z.object({
+    type: z.literal("lok/sendItem"),
+    to: z.string().min(1).max(32),
+    tokenId: z.number().int().positive(),
+    amount: z.number().int().positive().max(1_000_000),
+  }),
+  z.object({
+    type: z.literal("lok/sendKek"),
+    to: z.string().min(1).max(32),
+    amount: z.string().regex(/^[1-9][0-9]{0,18}$/),
+  }),
+  z.object({
+    type: z.literal("lok/list"),
+    tokenId: z.number().int().positive(),
+    amount: z.number().int().positive().max(1_000_000),
+  }),
+  z.object({
+    type: z.literal("lok/bid"),
+    listingId: z.string().regex(/^[1-9][0-9]{0,18}$/),
+    amount: z.string().regex(/^[1-9][0-9]{0,18}$/),
+  }),
+  z.object({
+    type: z.literal("lok/cancel"),
+    listingId: z.string().regex(/^[1-9][0-9]{0,18}$/),
+  }),
+  z.object({
+    type: z.literal("lok/settle"),
+    listingId: z.string().regex(/^[1-9][0-9]{0,18}$/),
+  }),
 ]);
 export type ClientMessage = z.infer<typeof ClientMessageSchema>;
 
@@ -240,6 +281,30 @@ export type PartyInviteSnapshot = {
   expiresAt: number;
 };
 
+
+export type LokItemBalance = { tokenId: number; amount: string };
+
+export type LokListingView = {
+  id: string;
+  seller: string;
+  sellerName: string;
+  itemId: number;
+  amount: string;
+  highBidder: string | null;
+  highBidderName: string | null;
+  highBid: string;
+  yours: boolean;
+};
+
+export type LokSnapshot = {
+  tokenId: string;
+  kek: string;
+  items: LokItemBalance[];
+  listings: LokListingView[];
+  /** engine-only: no L2 endpoint. rpc-unwatched: endpoint set, vault not followed. */
+  chain: "engine-only" | "rpc-unwatched";
+};
+
 export type SnapshotMessage = {
   type: "snapshot";
   tick: number;
@@ -282,6 +347,8 @@ export type SnapshotMessage = {
     freeStatPoints: number;
     /** Allocated free attribute points. */
     freeStats: { str: number; dex: number; vit: number; agi: number; int: number; mnd: number };
+    /** Hash-chained lok balances. KEK is deposit-only. */
+    lok?: LokSnapshot;
   };
   units: UnitSnapshot[];
   log: string[];
@@ -335,6 +402,8 @@ export type ServerMessage =
       spells?: SpellOffer[];
       /** Craft Master — client may open the Crafting panel. */
       craftOpen?: boolean;
+      /** Provisioner — client may open the lok exchange. */
+      lokOpen?: boolean;
     };
 
 export function parseClientMessage(raw: unknown): ClientMessage | null {
