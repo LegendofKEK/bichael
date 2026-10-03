@@ -1,5 +1,6 @@
 import {
   JOBS,
+  JOB_IDS,
   MAX_LEVEL,
   REST_TICK,
   SUBJOB_UNLOCK_LEVEL,
@@ -158,6 +159,7 @@ import {
   resolveBattleMageAbility,
 } from "./battlemage-abilities";
 import { playerStance, resolveTimAbility } from "./tim-abilities";
+import { defaultLokDir, LokWorld } from "./lok-world";
 import {
   PARTY_INVITE_RANGE,
   PARTY_SHARE_RANGE,
@@ -412,6 +414,202 @@ let tick = 0;
 /** Pale Hollow Segment A field mobs. */
 let mobs: Mob[] = spawnSegmentAPack();
 let fieldNodes: FieldNode[] = createPaleHollowNodes();
+
+const lok: LokWorld = (() => {
+  try {
+    const world = LokWorld.open(defaultLokDir());
+    console.log(
+      `[bellgrave] lok log ${world.logPath} entries=${world.length}. ${world.chainNote}`,
+    );
+    return world;
+  } catch (err) {
+    console.error("[bellgrave] lok log failed to open; refusing to start.", err);
+    process.exit(1);
+  }
+})();
+
+function lokToken(p: Player): string {
+  const existing = lok.tokenFor(p.charId);
+  if (existing) return existing;
+  const job = JOB_IDS.indexOf(p.job);
+  const res = lok.spawn(p.charId, p.name, job < 0 ? 0 : job);
+  return res.ok ? res.tokenId : "";
+}
+
+function itemLabel(tokenId: number): string {
+  return getItem(tokenId)?.name ?? "item " + tokenId;
+}
+
+function tellToken(tokenId: string, message: string) {
+  for (const slots of accountRoster.values()) {
+    for (const pl of slots.values()) {
+      if (lok.tokenFor(pl.charId) !== tokenId) continue;
+      if (pl.ws.readyState !== pl.ws.OPEN) continue;
+      pushLog(pl, message);
+    }
+  }
+}
+
+function handleLokImport(p: Player, tokenId: number, amount: number) {
+  const token = lokToken(p);
+  if (!token) {
+    pushLog(p, "Could not open your log identity.");
+    return;
+  }
+  if (!takeItem(p.inventory, tokenId, amount)) {
+    pushLog(p, "You are not holding that many.");
+    return;
+  }
+  const stillEquipped = Object.values(p.equip).includes(tokenId) && invAmount(p.inventory, tokenId) <= 0;
+  if (stillEquipped) {
+    addItem(p.inventory, tokenId, amount);
+    pushLog(p, "Unequip " + itemLabel(tokenId) + " before importing the last one.");
+    return;
+  }
+  const res = lok.importItem(token, String(tokenId), String(amount));
+  if (!res.ok) {
+    addItem(p.inventory, tokenId, amount);
+    pushLog(p, res.error);
+    return;
+  }
+  pushLog(p, "Imported " + itemLabel(tokenId) + " x" + amount + " into the log.");
+  send(p.ws, snapshotFor(p));
+}
+
+function handleLokExport(p: Player, tokenId: number, amount: number) {
+  const token = lokToken(p);
+  if (!token) {
+    pushLog(p, "Could not open your log identity.");
+    return;
+  }
+  const res = lok.exportItem(token, String(tokenId), String(amount));
+  if (!res.ok) {
+    pushLog(p, res.error);
+    return;
+  }
+  addItem(p.inventory, tokenId, amount);
+  pushLog(
+    p,
+    "Exported " + itemLabel(tokenId) + " x" + amount + " to your bag. No chain withdrawal was submitted.",
+  );
+  send(p.ws, snapshotFor(p));
+}
+
+function handleLokSendItem(p: Player, to: string, tokenId: number, amount: number) {
+  const token = lokToken(p);
+  if (!token) {
+    pushLog(p, "Could not open your log identity.");
+    return;
+  }
+  const dest = lok.resolveName(to, token);
+  if (!dest.ok) {
+    pushLog(p, dest.error);
+    return;
+  }
+  const res = lok.sendItem(token, dest.tokenId, String(tokenId), String(amount));
+  if (!res.ok) {
+    pushLog(p, res.error);
+    return;
+  }
+  pushLog(p, "Sent " + itemLabel(tokenId) + " x" + amount + " to " + to.trim() + ".");
+  tellToken(dest.tokenId, p.name + " sent you " + itemLabel(tokenId) + " x" + amount + ".");
+  send(p.ws, snapshotFor(p));
+}
+
+function handleLokSendKek(p: Player, to: string, amount: string) {
+  const token = lokToken(p);
+  if (!token) {
+    pushLog(p, "Could not open your log identity.");
+    return;
+  }
+  const dest = lok.resolveName(to, token);
+  if (!dest.ok) {
+    pushLog(p, dest.error);
+    return;
+  }
+  const res = lok.sendKek(token, dest.tokenId, amount);
+  if (!res.ok) {
+    pushLog(p, res.error);
+    return;
+  }
+  pushLog(p, "Sent " + amount + " KEK to " + to.trim() + ".");
+  tellToken(dest.tokenId, p.name + " sent you " + amount + " KEK.");
+  send(p.ws, snapshotFor(p));
+}
+
+function handleLokList(p: Player, tokenId: number, amount: number) {
+  const token = lokToken(p);
+  if (!token) {
+    pushLog(p, "Could not open your log identity.");
+    return;
+  }
+  const res = lok.list(token, String(tokenId), String(amount));
+  if (!res.ok) {
+    pushLog(p, res.error);
+    return;
+  }
+  pushLog(
+    p,
+    "Listed " + itemLabel(tokenId) + " x" + amount + " as #" + res.listingId + ". That stack is in escrow.",
+  );
+  send(p.ws, snapshotFor(p));
+}
+
+function handleLokBid(p: Player, listingId: string, amount: string) {
+  const token = lokToken(p);
+  if (!token) {
+    pushLog(p, "Could not open your log identity.");
+    return;
+  }
+  const res = lok.bid(listingId, token, amount);
+  if (!res.ok) {
+    pushLog(p, res.error);
+    return;
+  }
+  pushLog(p, "Bid " + amount + " KEK on listing #" + listingId + ".");
+  send(p.ws, snapshotFor(p));
+}
+
+function handleLokCancel(p: Player, listingId: string) {
+  const token = lokToken(p);
+  if (!token) {
+    pushLog(p, "Could not open your log identity.");
+    return;
+  }
+  const res = lok.cancel(listingId, token);
+  if (!res.ok) {
+    pushLog(p, res.error);
+    return;
+  }
+  pushLog(p, "Cancelled listing #" + listingId + ". Escrow returned.");
+  send(p.ws, snapshotFor(p));
+}
+
+function handleLokSettle(p: Player, listingId: string) {
+  const token = lokToken(p);
+  if (!token) {
+    pushLog(p, "Could not open your log identity.");
+    return;
+  }
+  const row = lok.view(token).listings.find((l) => l.id === listingId);
+  const res = lok.settle(listingId);
+  if (!res.ok) {
+    pushLog(p, res.error);
+    return;
+  }
+  pushLog(p, "Settled listing #" + listingId + ".");
+  if (row?.highBidder) {
+    tellToken(
+      row.highBidder,
+      "You won listing #" + listingId + " (" + itemLabel(row.itemId) + " x" + row.amount + ").",
+    );
+    if (row.seller !== token) {
+      tellToken(row.seller, "Listing #" + listingId + " settled for " + row.highBid + " KEK.");
+    }
+  }
+  send(p.ws, snapshotFor(p));
+}
+
 
 const JOB_MASTER = {
   id: "npc-ph-job-master",
@@ -1487,6 +1685,7 @@ function snapshotFor(p: Player): SnapshotMessage {
       skillPrestige: p.skillPrestige,
       freeStatPoints: p.freeStatPoints,
       freeStats: { ...p.freeStats },
+      lok: lok.view(lokToken(p)),
     },
     units,
     log: p.lastLog.slice(-12),
@@ -2213,7 +2412,7 @@ function handleNpcInteract(p: Player, npcId: string) {
       crafter:
         "Bring base mats from the field. Synth at my bench — I'll rank your crafts as you work.",
       vendor:
-        "Provisions are thin, traveler. Gather Pale Flax in the scrub, River Sand on the clay banks, and Rock Salt flecks on the limestone faces — I do not stock craft mats, only advice.",
+        "The camp ledger is here. Import what you hold, then send it or list it. KEK only arrives as a Robinhood vault deposit — I cannot mint it.",
     };
     send(p.ws, {
       type: "npc/dialog",
@@ -2221,6 +2420,7 @@ function handleNpcInteract(p: Player, npcId: string) {
       title: hub.name,
       body: bodies[hub.role] ?? "â€¦",
       craftOpen: hub.role === "crafter",
+      lokOpen: hub.role === "vendor",
     });
     return;
   }
@@ -3596,6 +3796,30 @@ function onMessage(ws: WebSocket, data: string) {
       break;
     case "party/disband":
       handlePartyDisband(p);
+      break;
+    case "lok/import":
+      handleLokImport(p, msg.tokenId, msg.amount);
+      break;
+    case "lok/export":
+      handleLokExport(p, msg.tokenId, msg.amount);
+      break;
+    case "lok/sendItem":
+      handleLokSendItem(p, msg.to, msg.tokenId, msg.amount);
+      break;
+    case "lok/sendKek":
+      handleLokSendKek(p, msg.to, msg.amount);
+      break;
+    case "lok/list":
+      handleLokList(p, msg.tokenId, msg.amount);
+      break;
+    case "lok/bid":
+      handleLokBid(p, msg.listingId, msg.amount);
+      break;
+    case "lok/cancel":
+      handleLokCancel(p, msg.listingId);
+      break;
+    case "lok/settle":
+      handleLokSettle(p, msg.listingId);
       break;
     default:
       break;

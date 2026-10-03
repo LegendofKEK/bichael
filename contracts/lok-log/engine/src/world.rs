@@ -89,6 +89,14 @@ impl World {
         self.listings.values()
     }
 
+    /// Spendable item balances for one character. Listed stacks are not included.
+    pub fn spendable_items(&self, token_id: &U256) -> Vec<(U256, U256)> {
+        match self.character_state(token_id) {
+            Some(state) => state.items(),
+            None => Vec::new(),
+        }
+    }
+
     pub fn character_state(&self, token_id: &U256) -> Option<&State> {
         self.characters.get(token_id).map(|c| &c.state)
     }

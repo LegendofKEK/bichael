@@ -1,0 +1,162 @@
+import { getItem } from "@bellgrave/items";
+import type { SnapshotMessage } from "@bellgrave/protocol";
+import { useState } from "react";
+import { send } from "./net";
+import { useGame } from "./state";
+
+type Props = {
+  you: SnapshotMessage["you"];
+  onClose: () => void;
+};
+
+function itemName(tokenId: number): string {
+  return getItem(tokenId)?.name ?? "Item " + tokenId;
+}
+
+export function LokPanel({ you, onClose }: Props) {
+  const units = useGame((s) => s.snapshot?.units ?? []);
+  const lok = you.lok;
+  const [to, setTo] = useState("");
+  const [kek, setKek] = useState("1");
+  const [bid, setBid] = useState<Record<string, string>>({});
+  const others = units.filter((u) => u.kind === "player" && u.name !== you.name);
+
+  if (!lok) {
+    return (
+      <div className="cmd-panel lok-panel">
+        <div className="cmd-panel-head">
+          <div>
+            <div className="cmd-kicker">Ledger</div>
+            <div className="cmd-panel-title">Exchange</div>
+          </div>
+          <button type="button" onClick={onClose} className="cmd-close-btn">
+            Close
+          </button>
+        </div>
+        <p>The log is not on this snapshot yet.</p>
+      </div>
+    );
+  }
+
+  const chainNote =
+    lok.chain === "engine-only"
+      ? "KEK is deposit-only from Robinhood L2. No chain endpoint is configured, so vault deposits are not credited and export is not a withdrawal."
+      : "A chain endpoint is set, but this server is not watching the vault or submitting exports yet.";
+
+  return (
+    <div className="cmd-panel lok-panel">
+      <div className="cmd-panel-head">
+        <div>
+          <div className="cmd-kicker">Provisioner</div>
+          <div className="cmd-panel-title">Exchange</div>
+          <div className="cmd-panel-sub">Log custody · no fee · KEK {lok.kek}</div>
+        </div>
+        <button type="button" onClick={onClose} className="cmd-close-btn">
+          Close
+        </button>
+      </div>
+      <p className="lok-note">{chainNote}</p>
+
+      <div className="cmd-section-label">Send to</div>
+      <div className="lok-row">
+        <input value={to} placeholder="Character name" onChange={(e) => setTo(e.target.value)} />
+        {others.map((u) => (
+          <button key={u.id} type="button" className="cmd-pill-tab" onClick={() => setTo(u.name)}>
+            {u.name}
+          </button>
+        ))}
+      </div>
+      <div className="lok-row">
+        <input value={kek} onChange={(e) => setKek(e.target.value)} />
+        <button
+          type="button"
+          className="boot-primary"
+          onClick={() => send({ type: "lok/sendKek", to, amount: kek })}
+        >
+          Send KEK
+        </button>
+      </div>
+
+      <div className="cmd-section-label">Bag · import</div>
+      {you.inventory.length === 0 && <p className="lok-note">Bag is empty.</p>}
+      {you.inventory.map((row) => (
+        <div className="lok-row" key={"bag-" + row.tokenId}>
+          <span>
+            {itemName(row.tokenId)} x{row.amount}
+          </span>
+          <button
+            type="button"
+            className="cmd-pill-tab"
+            onClick={() => send({ type: "lok/import", tokenId: row.tokenId, amount: row.amount })}
+          >
+            Import
+          </button>
+        </div>
+      ))}
+
+      <div className="cmd-section-label">Log · send, list, export</div>
+      {lok.items.length === 0 && <p className="lok-note">Nothing spendable on the log.</p>}
+      {lok.items.map((row) => (
+        <div className="lok-row" key={"log-" + row.tokenId}>
+          <span>
+            {itemName(row.tokenId)} x{row.amount}
+          </span>
+          <button
+            type="button"
+            className="cmd-pill-tab"
+            onClick={() => send({ type: "lok/sendItem", to, tokenId: row.tokenId, amount: Number(row.amount) })}
+          >
+            Send
+          </button>
+          <button
+            type="button"
+            className="cmd-pill-tab"
+            onClick={() => send({ type: "lok/list", tokenId: row.tokenId, amount: Number(row.amount) })}
+          >
+            List
+          </button>
+          <button
+            type="button"
+            className="cmd-pill-tab"
+            onClick={() => send({ type: "lok/export", tokenId: row.tokenId, amount: Number(row.amount) })}
+          >
+            Export
+          </button>
+        </div>
+      ))}
+
+      <div className="cmd-section-label">Auction</div>
+      {lok.listings.length === 0 && <p className="lok-note">No listings.</p>}
+      {lok.listings.map((row) => (
+        <div className="lok-row" key={row.id}>
+          <span>
+            #{row.id} {itemName(row.itemId)} x{row.amount} · {row.sellerName} · bid {row.highBid}
+            {row.highBidderName ? " by " + row.highBidderName : ""}
+          </span>
+          <input
+            value={bid[row.id] ?? ""}
+            placeholder="KEK"
+            onChange={(e) => setBid({ ...bid, [row.id]: e.target.value })}
+          />
+          <button
+            type="button"
+            className="cmd-pill-tab"
+            onClick={() => send({ type: "lok/bid", listingId: row.id, amount: bid[row.id] ?? "" })}
+          >
+            Bid
+          </button>
+          {row.yours && (
+            <button type="button" className="cmd-pill-tab" onClick={() => send({ type: "lok/cancel", listingId: row.id })}>
+              Cancel
+            </button>
+          )}
+          {row.highBidder && (
+            <button type="button" className="cmd-pill-tab" onClick={() => send({ type: "lok/settle", listingId: row.id })}>
+              Settle
+            </button>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}

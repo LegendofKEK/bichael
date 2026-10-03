@@ -19,6 +19,7 @@ export type NpcDialog = {
   subjobMode?: boolean;
   subLevel?: number;
   craftOpen?: boolean;
+  lokOpen?: boolean;
 };
 
 type GameState = {

@@ -126,8 +126,9 @@ pub fn replay(doc: &LogDocument) -> Result<ReplayReport, ReplayStop> {
     })
 }
 
-/// Replay a world log from LOK_WORLD_V1. A bad hash is not applied, and later events are not inspected.
-pub fn replay_world(doc: &WorldDocument) -> Result<WorldReplayReport, ReplayStop> {
+/// Replay a world log from LOK_WORLD_V1 into a live `World`.
+/// A bad hash is not applied, and later events are not inspected.
+pub fn load_world(doc: &WorldDocument) -> Result<World, ReplayStop> {
     let mut world = World::new();
     for (i, entry) in doc.entries.iter().enumerate() {
         let index = i as u64;
@@ -143,11 +144,28 @@ pub fn replay_world(doc: &WorldDocument) -> Result<WorldReplayReport, ReplayStop
             .apply(entry.input.clone())
             .map_err(|reason| ReplayStop::Rejected { index, reason })?;
     }
+    Ok(world)
+}
+
+/// Replay a world log from LOK_WORLD_V1. A bad hash is not applied, and later events are not inspected.
+pub fn replay_world(doc: &WorldDocument) -> Result<WorldReplayReport, ReplayStop> {
+    let world = load_world(doc)?;
     Ok(WorldReplayReport {
         entries: world.len(),
         head: world.head(),
         characters: world.snapshots(),
     })
+}
+
+pub(crate) fn replay_stop_message(stop: &ReplayStop) -> String {
+    match stop {
+        ReplayStop::BadHash { index, expected, computed } => format!(
+            "bad hash at {index}: log has 0x{} computed 0x{}",
+            hex::encode(expected),
+            hex::encode(computed)
+        ),
+        ReplayStop::Rejected { index, reason } => format!("rejected at {index}: {reason}"),
+    }
 }
 
 pub fn parse_log(text: &str) -> Result<LogDocument, String> {
@@ -216,7 +234,7 @@ fn req_u256(value: &serde_json::Value, key: &str) -> Result<U256, String> {
         .and_then(parse_u256_json)
 }
 
-fn parse_input(value: &serde_json::Value) -> Result<Input, String> {
+pub(crate) fn parse_input(value: &serde_json::Value) -> Result<Input, String> {
     let kind = value
         .get("type")
         .and_then(|v| v.as_str())
@@ -299,4 +317,67 @@ fn parse_u256_json(value: &serde_json::Value) -> Result<U256, String> {
         return Ok(U256::from_u64(n));
     }
     Err("token id must be a string or a small number".to_string())
+}
+
+pub(crate) fn input_to_json(input: &Input) -> serde_json::Value {
+    let s = |v: &U256| serde_json::Value::String(v.to_dec());
+    match input {
+        Input::Spawn { token_id, starting_job } => serde_json::json!({
+            "type": "spawn",
+            "tokenId": token_id.to_dec(),
+            "startingJob": starting_job,
+        }),
+        Input::DepositKek { token_id, amount } => serde_json::json!({
+            "type": "depositKek",
+            "tokenId": s(token_id),
+            "amount": s(amount),
+        }),
+        Input::ImportItem { token_id, item_id, amount } => serde_json::json!({
+            "type": "importItem",
+            "tokenId": s(token_id),
+            "itemId": s(item_id),
+            "amount": s(amount),
+        }),
+        Input::ExportItem { token_id, item_id, amount } => serde_json::json!({
+            "type": "exportItem",
+            "tokenId": s(token_id),
+            "itemId": s(item_id),
+            "amount": s(amount),
+        }),
+        Input::SendItem { from, to, item_id, amount } => serde_json::json!({
+            "type": "sendItem",
+            "from": s(from),
+            "to": s(to),
+            "itemId": s(item_id),
+            "amount": s(amount),
+        }),
+        Input::SendKek { from, to, amount } => serde_json::json!({
+            "type": "sendKek",
+            "from": s(from),
+            "to": s(to),
+            "amount": s(amount),
+        }),
+        Input::List { listing_id, seller, item_id, amount } => serde_json::json!({
+            "type": "list",
+            "listingId": s(listing_id),
+            "seller": s(seller),
+            "itemId": s(item_id),
+            "amount": s(amount),
+        }),
+        Input::Bid { listing_id, bidder, amount } => serde_json::json!({
+            "type": "bid",
+            "listingId": s(listing_id),
+            "bidder": s(bidder),
+            "amount": s(amount),
+        }),
+        Input::Cancel { listing_id, seller } => serde_json::json!({
+            "type": "cancel",
+            "listingId": s(listing_id),
+            "seller": s(seller),
+        }),
+        Input::Settle { listing_id } => serde_json::json!({
+            "type": "settle",
+            "listingId": s(listing_id),
+        }),
+    }
 }

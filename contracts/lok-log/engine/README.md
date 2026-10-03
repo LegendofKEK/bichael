@@ -2,7 +2,7 @@
 
 First slice of the Bellgrave lok engine. It sits next to `contracts/lok-log` and must reproduce the golden vectors pinned in `test/Golden.t.sol` and recomputed by `test/golden/verify.mjs`.
 
-KEK is deposit-only from Robinhood L2 (not earnable). `DepositKek` credits KEK already in the vault; it is not a mint. Transfers, bids, and settlement move balances the character already holds. No transfer tax and no auction fee are specified, so amounts move flat. The game server and client are not wired.
+KEK is deposit-only from Robinhood L2 (not earnable). `DepositKek` credits KEK already in the vault; it is not a mint. Transfers, bids, and settlement move balances the character already holds. No transfer tax and no auction fee are specified, so amounts move flat. The game server loads this crate as wasm (`pkg/lok_engine.wasm`) and appends a persisted world log. The client exchange sits on the Provisioner.
 
 ## What is implemented
 
@@ -81,4 +81,4 @@ The world chain head starts at `keccak256("LOK_WORLD_V1")`, not a character gene
 
 ## Left for the next slice
 
-Ruleset evaluation, XP / abilities / equipment inputs, checkpoint segment assembly against a published log, Merkle proofs for the state root, and watching `KekVault` before appending `depositKek`. No server or client wiring.
+Ruleset evaluation, XP / abilities / equipment inputs, checkpoint segment assembly against a published log, Merkle proofs for the state root, and watching `KekVault` before appending `depositKek`. The server can append `depositKek` / `exportItem`, but it does not follow Robinhood L2 unless `LOK_CHAIN_RPC` is set, and even then it does not submit or index chain transactions yet.
