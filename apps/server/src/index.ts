@@ -173,7 +173,6 @@ import { playerStance, resolveTimAbility } from "./tim-abilities";
 import { loadLokEnv, startKekDepositWatcher } from "./lok-chain";
 import {
   claimQueuedWithdrawal,
-  debitAfterQueue,
   depositKekOnchain,
   ensureLocalRuleset,
   linkCharacterNft,
@@ -182,7 +181,9 @@ import {
   queuesFor,
   readWithdrawDelay,
   vaultDelaySec,
+  withdrawalById,
 } from "./lok-vault";
+import { endClaim, guardedKekMove, guardedWithdraw, prepareClaim, reservedOf } from "./kek-guard";
 import { defaultLokDir, LokWorld } from "./lok-world";
 import {
   PARTY_INVITE_RANGE,
@@ -598,35 +599,49 @@ function handleLokSendKek(p: Player, to: string, amount: string) {
     pushLog(p, dest.error);
     return;
   }
-  const res = lok.sendKek(token, dest.tokenId, amount);
-  if (!res.ok) {
-    pushLog(p, res.error);
-    return;
-  }
-  pushLog(p, "Sent " + amount + " KEK to " + to.trim() + ".");
-  tellToken(dest.tokenId, p.name + " sent you " + amount + " KEK.");
-  send(p.ws, snapshotFor(p));
+  void guardedKekMove(token, () => {
+    let free = 0n;
+    let cost = 0n;
+    try {
+      free = BigInt(lok.kekOf(token)) - reservedOf(token);
+      cost = BigInt(amount);
+    } catch {
+      pushLog(p, "Bad KEK amount. Nothing was sent.");
+      send(p.ws, snapshotFor(p));
+      return;
+    }
+    if (free < cost) {
+      pushLog(p, "Need " + amount + " KEK (you have " + free.toString() + " spendable). Nothing was sent.");
+      send(p.ws, snapshotFor(p));
+      return;
+    }
+    const res = lok.sendKek(token, dest.tokenId, amount);
+    if (!res.ok) pushLog(p, res.error);
+    else {
+      pushLog(p, "Sent " + amount + " KEK to " + to.trim() + ".");
+      tellToken(dest.tokenId, p.name + " sent you " + amount + " KEK.");
+    }
+    send(p.ws, snapshotFor(p));
+  });
 }
 
-/** Debit spendable log KEK. Fails closed; does not mint. Dust is no longer the spend currency. */
-function spendLogKek(p: Player, amount: number): { ok: true } | { ok: false; error: string } {
-  if (!Number.isSafeInteger(amount) || amount < 0) return { ok: false, error: "Bad KEK cost." };
-  if (amount === 0) return { ok: true };
+function spendLogKek(p: Player, amount: number): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (!Number.isSafeInteger(amount) || amount < 0) return Promise.resolve({ ok: false, error: "Bad KEK cost." });
+  if (amount === 0) return Promise.resolve({ ok: true });
   const token = lokToken(p);
-  if (!token) return { ok: false, error: "Could not open your log identity." };
-  const have = lok.kekOf(token);
-  let bal: bigint;
-  let cost: bigint;
-  try {
-    bal = BigInt(have);
-    cost = BigInt(amount);
-  } catch {
-    return { ok: false, error: "Bad KEK balance." };
-  }
-  if (bal < cost) {
-    return { ok: false, error: `Need ${amount} KEK (you have ${have}).` };
-  }
-  return lok.spendKek(token, String(amount));
+  if (!token) return Promise.resolve({ ok: false, error: "Could not open your log identity." });
+  return guardedKekMove(token, () => {
+    let bal: bigint;
+    let cost: bigint;
+    try {
+      bal = BigInt(lok.kekOf(token)) - reservedOf(token);
+      cost = BigInt(amount);
+    } catch {
+      return { ok: false, error: "Bad KEK balance." };
+    }
+    if (bal < cost) return { ok: false, error: "Need " + amount + " KEK (you have " + bal.toString() + ")." };
+    return lok.spendKek(token, String(amount));
+  });
 }
 
 function handleLokDeposit(p: Player, amount: string) {
@@ -653,31 +668,20 @@ function handleLokWithdrawKek(p: Player, amount: string) {
     pushLog(p, "Could not open your log identity.");
     return;
   }
-  let have = 0n;
-  let cost = 0n;
-  try {
-    have = BigInt(lok.kekOf(token));
-    cost = BigInt(amount);
-  } catch {
-    pushLog(p, "Bad KEK amount. Nothing was spent.");
-    return;
-  }
-  if (have < cost) {
-    pushLog(p, "Need " + amount + " KEK (you have " + have.toString() + "). Nothing was queued.");
-    return;
-  }
-  void debitAfterQueue(
-    () => queueKekWithdrawal(token, amount),
-    () => lok.withdrawKek(token, amount),
-  ).then((res) => {
-    if (!res.ok) {
-      pushLog(p, res.error);
-    } else {
+  void guardedWithdraw({
+    token,
+    amount,
+    balanceOf: () => lok.kekOf(token),
+    debit: () => lok.withdrawKek(token, amount),
+    queue: () => queueKekWithdrawal(token, amount),
+  }).then((res) => {
+    if (!res.ok) pushLog(p, res.error);
+    else {
       const delay = vaultDelaySec();
       const wait = delay ? Math.round(delay / 3600) + "h" : "the vault delay";
       pushLog(
         p,
-        "Queued vault withdrawal #" + res.id + " for " + amount + " KEK. It is not paid out before " + wait + ". Spendable KEK was debited because the queue exists.",
+        "Queued vault withdrawal #" + res.id + " for " + amount + " KEK. It is not paid out before " + wait + ". That KEK was reserved before the vault call and debited once the queue existed.",
       );
     }
     send(p.ws, snapshotFor(p));
@@ -685,11 +689,24 @@ function handleLokWithdrawKek(p: Player, amount: string) {
 }
 
 function handleLokClaim(p: Player, id: string) {
-  void claimQueuedWithdrawal(id).then((res) => {
-    if (!res.ok) pushLog(p, res.error);
-    else pushLog(p, "Claimed vault withdrawal #" + id + ". It was already debited from spendable KEK when it was queued.");
-    send(p.ws, snapshotFor(p));
-  });
+  const token = lokToken(p);
+  if (!token) {
+    pushLog(p, "Could not open your log identity.");
+    return;
+  }
+  const row = withdrawalById(id);
+  const gate = prepareClaim(token, row && row.status === "pending" ? row : undefined, Date.now());
+  if (!gate.ok) {
+    pushLog(p, gate.error);
+    return;
+  }
+  void claimQueuedWithdrawal(id)
+    .then((res) => {
+      if (!res.ok) pushLog(p, res.error);
+      else pushLog(p, "Claimed vault withdrawal #" + id + ". It was already debited from spendable KEK when it was queued.");
+      send(p.ws, snapshotFor(p));
+    })
+    .finally(() => endClaim(token));
 }
 
 function handleLokList(p: Player, tokenId: number, amount: number) {
@@ -716,13 +733,25 @@ function handleLokBid(p: Player, listingId: string, amount: string) {
     pushLog(p, "Could not open your log identity.");
     return;
   }
-  const res = lok.bid(listingId, token, amount);
-  if (!res.ok) {
-    pushLog(p, res.error);
-    return;
-  }
-  pushLog(p, "Bid " + amount + " KEK on listing #" + listingId + ".");
-  send(p.ws, snapshotFor(p));
+  void guardedKekMove(token, () => {
+    let free = 0n;
+    let cost = 0n;
+    try {
+      free = BigInt(lok.kekOf(token)) - reservedOf(token);
+      cost = BigInt(amount);
+    } catch {
+      pushLog(p, "Bad KEK amount. Nothing was bid.");
+      return;
+    }
+    if (free < cost) {
+      pushLog(p, "Need " + amount + " KEK (you have " + free.toString() + " spendable). Nothing was bid.");
+      return;
+    }
+    const res = lok.bid(listingId, token, amount);
+    if (!res.ok) pushLog(p, res.error);
+    else pushLog(p, "Bid " + amount + " KEK on listing #" + listingId + ".");
+    send(p.ws, snapshotFor(p));
+  });
 }
 
 function handleLokCancel(p: Player, listingId: string) {
@@ -2629,7 +2658,7 @@ function handleNpcInteract(p: Player, npcId: string) {
   pushLog(p, "Nothing happens.");
 }
 
-function handleSpellBuy(p: Player, id: AbilityId) {
+async function handleSpellBuy(p: Player, id: AbilityId) {
   if (!canReachTownNpc(p.x, p.z, TRAINER.x, TRAINER.z)) {
     pushLog(p, "You must speak with the Trainer to buy abilities.");
     return;
@@ -2661,7 +2690,7 @@ function handleSpellBuy(p: Player, id: AbilityId) {
     return;
   }
   const cost = trainerAbilityDustCost(unlockLevel);
-  const paid = spendLogKek(p, cost);
+  const paid = await spendLogKek(p, cost);
   if (!paid.ok) {
     pushLog(p, `Need ${cost} KEK for ${abilityLabel(id)}. ${paid.error}`);
     return;
@@ -3766,7 +3795,7 @@ function handleGather(p: Player, nodeId: string) {
   send(p.ws, snapshotFor(p));
 }
 
-function handleCraft(p: Player, itemId: number) {
+async function handleCraft(p: Player, itemId: number) {
   const crafter = PH_HUB_NPCS.find((n) => n.role === "crafter");
   if (!crafter || !canReachTownNpc(p.x, p.z, crafter.x, crafter.z)) {
     pushLog(p, "You must be near the Craft Master to craft.");
@@ -3800,7 +3829,7 @@ function handleCraft(p: Player, itemId: number) {
     return;
   }
   const kekCost = def.recipe?.kek ?? 0;
-  const paid = spendLogKek(p, kekCost);
+  const paid = await spendLogKek(p, kekCost);
   if (!paid.ok) {
     pushLog(p, `Need ${kekCost} KEK to craft ${def.name}. ${paid.error}`);
     return;

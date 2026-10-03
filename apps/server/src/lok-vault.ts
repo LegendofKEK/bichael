@@ -100,11 +100,31 @@ export function depositCastArgs(env: Env, tokenId: string, amount: string): stri
 export async function debitAfterQueue(
   queue: () => Promise<VaultOk | VaultErr>,
   debit: () => { ok: true } | { ok: false; error: string },
-): Promise<(VaultOk & { debited: true }) | (VaultErr & { debited: false })> {
-  const queued = await queue();
-  if (!queued.ok) return { ...queued, debited: false };
+  credit: () => { ok: true } | { ok: false; error: string },
+): Promise<(VaultOk & { debited: true }) | (VaultErr & { debited: boolean })> {
   const spent = debit();
-  if (!spent.ok) return { ok: false, error: "The vault withdrawal was queued, but spendable KEK was not debited. " + spent.error, debited: false };
+  if (!spent.ok) return { ok: false, error: spent.error, debited: false };
+  let queued: VaultOk | VaultErr;
+  try {
+    queued = await queue();
+  } catch (err) {
+    const back = credit();
+    if (!back.ok) {
+      return { ok: false, error: "Withdrawal threw and the debit could not be returned. " + back.error, debited: true };
+    }
+    return { ok: false, error: "Withdrawal was not queued. The debit was returned.", debited: false };
+  }
+  if (!queued.ok) {
+    const back = credit();
+    if (!back.ok) {
+      return {
+        ok: false,
+        error: "The vault withdrawal was not queued and the debit could not be returned. " + back.error,
+        debited: true,
+      };
+    }
+    return { ok: false, error: queued.error, debited: false };
+  }
   return { ...queued, debited: true };
 }
 
@@ -114,6 +134,10 @@ let queuePath = "";
 
 export function vaultDelaySec(): number | null {
   return delaySec;
+}
+
+export function withdrawalById(id: string): QueuedWithdrawal | undefined {
+  return queues.find((row) => row.id === id);
 }
 
 export function queuesFor(tokenId: string): { id: string; amount: string; availableAt: number }[] {

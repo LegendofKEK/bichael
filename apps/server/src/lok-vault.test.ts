@@ -14,31 +14,46 @@ const ENV = {
   LOK_ROTATOR_KEY: "rotator-key",
 };
 
-test("a failed vault queue does not debit spendable KEK", async () => {
-  let debited = false;
+test("a failed vault queue returns the debit", async () => {
+  let balance = 1000;
+  let queued = false;
   const res = await debitAfterQueue(
     async () => ({ ok: false, error: "reverted" }),
     () => {
-      debited = true;
+      balance -= 1000;
+      return { ok: true };
+    },
+    () => {
+      balance += 1000;
       return { ok: true };
     },
   );
   assert.equal(res.ok, false);
   assert.equal(res.debited, false);
-  assert.equal(debited, false);
+  assert.equal(balance, 1000);
+  assert.equal(queued, false);
 });
 
-test("spendable KEK is debited only after the queue exists", async () => {
-  let debited = false;
+test("spendable KEK is reserved before the queue resolves", async () => {
+  let balance = 1000;
+  let debitedBeforeQueue = false;
   const res = await debitAfterQueue(
-    async () => ({ ok: true, id: "4", availableAt: 10 }),
+    async () => {
+      debitedBeforeQueue = balance === 0;
+      return { ok: true, id: "4", availableAt: 10 };
+    },
     () => {
-      debited = true;
+      balance -= 1000;
+      return { ok: true };
+    },
+    () => {
+      balance += 1000;
       return { ok: true };
     },
   );
   assert.equal(res.ok, true);
-  assert.equal(debited, true);
+  assert.equal(debitedBeforeQueue, true);
+  assert.equal(balance, 0);
   if (res.ok) assert.equal(res.id, "4");
 });
 
