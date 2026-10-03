@@ -9,9 +9,11 @@ pub enum Input {
     /// First log event. Must name the same token and job the genesis anchor was built from.
     Spawn { token_id: U256, starting_job: u8 },
     /// Log image of a KekVault deposit. Credits KEK the vault already holds. Not a mint.
-    DepositKek { token_id: U256, amount: U256 },
+    /// `nonce` is that character's inbound id (shared with item imports) and may be applied once.
+    DepositKek { token_id: U256, amount: U256, nonce: u64 },
     /// Log image of an item import. Credits items already burned into the log. Not a mint of KEK.
-    ImportItem { token_id: U256, item_id: U256, amount: U256 },
+    /// `nonce` is that character's inbound id (shared with KEK deposits) and may be applied once.
+    ImportItem { token_id: U256, item_id: U256, amount: U256, nonce: u64 },
     /// Burns spendable items out of the log (the export side of a checkpoint). Escrowed listings are not spendable.
     ExportItem { token_id: U256, item_id: U256, amount: U256 },
     /// Decreases spendable KEK. Escrowed bids are not spendable, so they cannot be withdrawn.
@@ -49,16 +51,18 @@ pub fn event_id(input: &Input) -> [u8; 32] {
             buf.u256(token_id);
             buf.u8(*starting_job);
         }
-        Input::DepositKek { token_id, amount } => {
+        Input::DepositKek { token_id, amount, nonce } => {
             buf.b256(&domain(b"LOK_DEPOSIT_KEK_V1"));
             buf.u256(token_id);
             buf.u256(amount);
+            buf.u64(*nonce);
         }
-        Input::ImportItem { token_id, item_id, amount } => {
+        Input::ImportItem { token_id, item_id, amount, nonce } => {
             buf.b256(&domain(b"LOK_IMPORT_ITEM_V1"));
             buf.u256(token_id);
             buf.u256(item_id);
             buf.u256(amount);
+            buf.u64(*nonce);
         }
         Input::ExportItem { token_id, item_id, amount } => {
             buf.b256(&domain(b"LOK_EXPORT_ITEM_V1"));

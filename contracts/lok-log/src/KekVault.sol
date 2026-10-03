@@ -16,9 +16,11 @@ import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol
 ///         Deposits are pulled from the player and enter the log as an inbound event. Withdrawals are decreases the
 ///         verifier attested in a checkpoint. Because a withdrawal moves real tokens (a compromised signer would be
 ///         theft, not just inflation), they are delayed and freezable:
-///           - queueWithdrawal refuses to queue more than the vault holds
+///           - queueWithdrawal refuses to queue more than this token deposited, minus withdrawals already reserved
+///             (pending or claimed). Another character's KEK in the same vault cannot be queued.
+///           - queueWithdrawal also refuses to queue more than the vault holds
 ///           - claims wait `withdrawDelay`, during which the guardian can cancel
-///           - cancelled funds stay in the vault; admin can restore a false positive
+///           - cancelled funds stay in the vault and release that token's reservation; admin can restore a false positive
 contract KekVault is Initializable, AccessControlUpgradeable, PausableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgradeable {
     using SafeERC20 for IERC20;
 
@@ -48,6 +50,12 @@ contract KekVault is Initializable, AccessControlUpgradeable, PausableUpgradeabl
     uint256 public nextWithdrawalId;
     uint256 public pendingTotal; // sum of Pending withdrawals
     mapping(uint256 => Withdrawal) public withdrawals;
+    /// KEK deposited for a character. Append-only storage.
+    mapping(uint256 => uint256) public depositedOf;
+    /// Pending plus claimed withdrawals for a character. Cancelled withdrawals are not reserved.
+    mapping(uint256 => uint256) public reservedOf;
+    /// Character a withdrawal id was queued for. Needed so cancel and restore adjust the right cap.
+    mapping(uint256 => uint256) public withdrawalToken;
 
     event Deposited(uint256 indexed tokenId, address indexed from, uint256 amount);
     event WithdrawalQueued(uint256 indexed id, uint256 indexed tokenId, address indexed to, uint256 amount, uint64 availableAt);
@@ -60,6 +68,7 @@ contract KekVault is Initializable, AccessControlUpgradeable, PausableUpgradeabl
     error BadDelay();
     error TransferMismatch();
     error InsufficientVault();
+    error ExceedsTokenDeposits();
     error NotPending();
     error NotCancelled();
     error NotYet();
@@ -110,6 +119,7 @@ contract KekVault is Initializable, AccessControlUpgradeable, PausableUpgradeabl
         kek.safeTransferFrom(from, address(this), amount);
         // fee-on-transfer / rebasing tokens would desync the in-game counter from custody
         if (kek.balanceOf(address(this)) - before != amount) revert TransferMismatch();
+        depositedOf[tokenId] += amount;
         emit Deposited(tokenId, from, amount);
     }
 
@@ -121,11 +131,15 @@ contract KekVault is Initializable, AccessControlUpgradeable, PausableUpgradeabl
     {
         if (amount == 0 || to == address(0)) revert BadAmount();
         if (pendingTotal + amount > kek.balanceOf(address(this))) revert InsufficientVault();
+        // A signer cannot queue another character's KEK, even when the vault still holds it.
+        if (reservedOf[tokenId] + amount > depositedOf[tokenId]) revert ExceedsTokenDeposits();
         uint64 at = uint64(block.timestamp) + withdrawDelay;
         unchecked {
             id = ++nextWithdrawalId;
         }
         withdrawals[id] = Withdrawal(to, at, Status.Pending, amount);
+        withdrawalToken[id] = tokenId;
+        reservedOf[tokenId] += amount;
         pendingTotal += amount;
         emit WithdrawalQueued(id, tokenId, to, amount, at);
     }
@@ -147,6 +161,7 @@ contract KekVault is Initializable, AccessControlUpgradeable, PausableUpgradeabl
         if (w.status != Status.Pending) revert NotPending();
         w.status = Status.Cancelled;
         pendingTotal -= w.amount;
+        reservedOf[withdrawalToken[id]] -= w.amount;
         emit WithdrawalCancelled(id);
     }
 
@@ -154,9 +169,12 @@ contract KekVault is Initializable, AccessControlUpgradeable, PausableUpgradeabl
     function restore(uint256 id) external onlyRole(DEFAULT_ADMIN_ROLE) {
         Withdrawal storage w = withdrawals[id];
         if (w.status != Status.Cancelled) revert NotCancelled();
+        uint256 tokenId = withdrawalToken[id];
+        if (reservedOf[tokenId] + w.amount > depositedOf[tokenId]) revert ExceedsTokenDeposits();
         if (pendingTotal + w.amount > kek.balanceOf(address(this))) revert InsufficientVault();
         w.status = Status.Pending;
         w.availableAt = uint64(block.timestamp) + withdrawDelay;
+        reservedOf[tokenId] += w.amount;
         pendingTotal += w.amount;
         emit WithdrawalRestored(id, w.availableAt);
     }

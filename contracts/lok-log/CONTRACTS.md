@@ -1,11 +1,13 @@
 # Locked product decisions
 
-These decisions are locked for the lok-log package. Contract logic is unchanged from the imported Foundry package.
+These decisions are locked for the lok-log package.
 
 - **KEK is deposit-only from Robinhood L2.** It is not earnable in-game. There is no faucet.
 - **KEK token (Robinhood L2):** `0x5a3544a0328afD50A9979e03404F35c555B88c00`. Deposit-only. There is no faucet. This is the token a vault would custody. Do not deploy it from this tree.
 - **In-game transfers and the auction house are lok-engine log events, not contracts.** A transfer or bid moves only KEK or items the character already holds. There is no transfer tax and no auction fee. Listing an item escrows it so it cannot be transferred, exported, or listed again until cancel or settle.
 - **Goal:** prove in-game events cheaply with an event-sourced rules engine and a hash-chained log. Items and KEK enter from Robinhood. Items can be minted out as NFTs (exports) and brought back (import).
+- **Per-token vault cap:** `KekVault.queueWithdrawal` for a `tokenId` cannot exceed that character's deposited KEK minus withdrawals already reserved for them (pending or claimed). Cancel releases the reservation; claim does not. Another player's KEK sitting in the same vault does not raise the cap. The global check (pending withdrawals cannot exceed the vault balance) still applies. `lok/withdrawKek` stays disabled on the server; the engine `WithdrawKek` op remains.
+- **Inbound nonce:** `depositKek` and `importItem` each take the next per-character inbound nonce (`inboundCount`, shared by both). The engine accepts that nonce once, in order, and a checkpoint's `inboundConsumed` is how many of those inbounds the log has applied. Replaying a nonce does not credit again. The game client cannot call a path that credits KEK or items; there is no client `lok/deposit`, and `lok/import` does not credit unless the server has already recorded that custody nonce. No vault watcher is wired.
 - **Withdrawal delay:** the deploy default stays **24 hours** (`KEK_WITHDRAW_DELAY` in `script/Deploy.s.sol`). An admin may set it between 1 hour and 30 days (`MIN_WITHDRAW_DELAY` / `MAX_WITHDRAW_DELAY` on `KekVault`). Do not change that default or those bounds.
 - **Known MVP limits** stay as the package README already states: no k-of-n signer threshold, no fraud proofs, no on-chain Merkle proof yet, and unique-item supply of 1 is not enforced in the items contract.
 

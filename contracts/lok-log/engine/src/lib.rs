@@ -5,6 +5,8 @@
 //! KEK is deposit-only: a character log credits it only as a vault deposit, and
 //! transfers cannot create it. `WithdrawKek` decreases spendable KEK and does not
 //! submit an onchain withdrawal. Each character has their own hash chain.
+//! A KEK deposit or item import carries that character's inbound nonce and is rejected
+//! if the same nonce is applied again. The nonce must be the next one (`inboundCount`).
 
 mod abi;
 mod chain;

@@ -29,6 +29,8 @@ struct Character {
     entries: Vec<LoggedEntry>,
     /// Onchain `logIndex`: events `[0, committed)` are committed. Rebase keeps this prefix.
     committed: u64,
+    /// Deposit and import nonces consumed on this character. Next accepted nonce is this plus one.
+    inbound_applied: u64,
 }
 
 /// An auction listing. The item amount is escrowed out of the seller's spendable
@@ -172,6 +174,11 @@ impl World {
         self.characters.get(token_id).map(|ch| ch.committed)
     }
 
+    /// How many inbound nonces (KEK deposits and item imports) this character has consumed.
+    pub fn inbound_applied(&self, token_id: &U256) -> Option<u64> {
+        self.characters.get(token_id).map(|ch| ch.inbound_applied)
+    }
+
     pub fn snapshots(&self) -> Vec<CharacterSnapshot> {
         self.characters
             .iter()
@@ -208,8 +215,8 @@ impl World {
         self.apply(Input::Spawn { token_id, starting_job })
     }
 
-    pub fn append_deposit_kek(&mut self, token_id: U256, amount: U256) -> Result<AppliedEvent, EngineError> {
-        self.apply(Input::DepositKek { token_id, amount })
+    pub fn append_deposit_kek(&mut self, token_id: U256, amount: U256, nonce: u64) -> Result<AppliedEvent, EngineError> {
+        self.apply(Input::DepositKek { token_id, amount, nonce })
     }
 
     pub fn append_withdraw_kek(&mut self, token_id: U256, amount: U256) -> Result<AppliedEvent, EngineError> {
@@ -221,8 +228,9 @@ impl World {
         token_id: U256,
         item_id: U256,
         amount: U256,
+        nonce: u64,
     ) -> Result<AppliedEvent, EngineError> {
-        self.apply(Input::ImportItem { token_id, item_id, amount })
+        self.apply(Input::ImportItem { token_id, item_id, amount, nonce })
     }
 
     pub fn append_export_item(
@@ -318,7 +326,7 @@ impl World {
             log_hash,
             ruleset_hash: [0u8; 32],
             summary,
-            inbound_consumed: 0,
+            inbound_consumed: inbound_count(&ch.entries[..to_index as usize], token_id),
             kek_out,
             exports,
         })
@@ -569,7 +577,7 @@ impl World {
                 }
                 touch.insert(*token_id);
             }
-            Input::DepositKek { token_id, amount }
+            Input::DepositKek { token_id, amount, .. }
             | Input::WithdrawKek { token_id, amount } => {
                 if *amount == U256::ZERO {
                     return Err(EngineError::ZeroAmount);
@@ -671,13 +679,14 @@ impl World {
                         chain: Chain::new(genesis_root(token_id, *starting_job)),
                         entries: Vec::new(),
                         committed: 0,
+                        inbound_applied: 0,
                     },
                 );
                 Ok(())
             }
-            Input::DepositKek { token_id, amount } => {
+            Input::DepositKek { token_id, amount, nonce } => {
                 if touch.contains(token_id) {
-                    self.credit_kek(*token_id, *amount)?;
+                    self.credit_inbound(*token_id, *nonce, |world| world.credit_kek(*token_id, *amount))?;
                 }
                 Ok(())
             }
@@ -687,9 +696,9 @@ impl World {
                 }
                 Ok(())
             }
-            Input::ImportItem { token_id, item_id, amount } => {
+            Input::ImportItem { token_id, item_id, amount, nonce } => {
                 if touch.contains(token_id) {
-                    self.credit_item(*token_id, *item_id, *amount)?;
+                    self.credit_inbound(*token_id, *nonce, |world| world.credit_item(*token_id, *item_id, *amount))?;
                 }
                 Ok(())
             }
@@ -761,6 +770,22 @@ impl World {
         let replayed = World::load(&doc).map_err(|_| EngineError::ConflictingLog)?;
         let state = replayed.character_state(token_id).ok_or(EngineError::NotSpawned)?;
         Ok((state.root(), state.summary()))
+    }
+
+    fn credit_inbound(
+        &mut self,
+        token_id: U256,
+        nonce: u64,
+        credit: impl FnOnce(&mut Self) -> Result<(), EngineError>,
+    ) -> Result<(), EngineError> {
+        let ch = self.characters.get(&token_id).ok_or(EngineError::NotSpawned)?;
+        let next = ch.inbound_applied.checked_add(1).ok_or(EngineError::Overflow)?;
+        if nonce == 0 || nonce != next {
+            return Err(EngineError::ReplayInbound);
+        }
+        credit(self)?;
+        self.characters.get_mut(&token_id).expect("inbound character").inbound_applied = nonce;
+        Ok(())
     }
 
     fn credit_kek(&mut self, token_id: U256, amount: U256) -> Result<(), EngineError> {
@@ -989,6 +1014,16 @@ fn fit_u32(amount: U256) -> Result<u32, EngineError> {
         return Err(EngineError::ZeroAmount);
     }
     Ok(value)
+}
+
+fn inbound_count(entries: &[LoggedEntry], token_id: &U256) -> u64 {
+    entries
+        .iter()
+        .filter(|entry| match &entry.input {
+            Input::DepositKek { token_id: who, .. } | Input::ImportItem { token_id: who, .. } => who == token_id,
+            _ => false,
+        })
+        .count() as u64
 }
 
 fn listing_id_of(input: &Input) -> Option<U256> {

@@ -28,6 +28,11 @@ type ApplyBody = {
 type BindChar = { charId: string; tokenId: string; name: string; job: number };
 type BindFile = { nextToken: string; nextListing: string; chars: BindChar[] };
 
+/** An inbound the server recorded from custody. The game client cannot insert these. */
+export type CustodyInbound =
+  | { kind: "depositKek"; tokenId: string; nonce: string; amount: string }
+  | { kind: "importItem"; tokenId: string; nonce: string; itemId: string; amount: string };
+
 const here = dirname(fileURLToPath(import.meta.url));
 
 export function defaultLokDir(): string {
@@ -76,6 +81,8 @@ export class LokWorld {
   private readonly bindPath: string;
   private bind: BindFile;
   private state: EngineState = { characters: [], listings: [] };
+  /** Custody nonces observed by the server. Not loaded from the client and not a chain watcher. */
+  private custody = new Map<string, CustodyInbound>();
   length = 0;
 
   private constructor(dataDir: string, wasmPath: string, env: NodeJS.ProcessEnv) {
@@ -118,13 +125,47 @@ export class LokWorld {
     return { ok: true, tokenId };
   }
 
-  /** Log image of a vault deposit. Caller must already have custody. Never a mint. */
-  depositKek(tokenId: string, amount: string): LokResult {
-    return this.apply({ op: "depositKek", tokenId, amount });
+  /**
+   * Remember an inbound the server already saw in custody (a vault deposit or an item burn).
+   * Does not credit the log. There is no chain watcher in this process; nothing here reads Robinhood.
+   * Game-client messages must not call this.
+   */
+  noteCustodyInbound(inbound: CustodyInbound): void {
+    this.custody.set(this.custodyKey(inbound.tokenId, inbound.nonce), inbound);
   }
 
-  importItem(tokenId: string, itemId: string, amount: string): LokResult {
-    return this.apply({ op: "importItem", tokenId, itemId, amount });
+  /** Log image of a vault deposit. Credits only a nonce this server already recorded. Never a mint. */
+  depositKek(tokenId: string, amount: string, nonce: string): LokResult {
+    const key = this.custodyKey(tokenId, nonce);
+    const noted = this.custody.get(key);
+    if (!noted || noted.kind !== "depositKek" || noted.amount !== amount || noted.tokenId !== tokenId) {
+      return { ok: false, error: "KEK deposit nonce is not a recorded custody inbound" };
+    }
+    const res = this.apply({ op: "depositKek", tokenId, amount, nonce });
+    if (res.ok) this.custody.delete(key);
+    return res;
+  }
+
+  /** Log image of an item import. Credits only a nonce this server already recorded. */
+  importItem(tokenId: string, itemId: string, amount: string, nonce: string): LokResult {
+    const key = this.custodyKey(tokenId, nonce);
+    const noted = this.custody.get(key);
+    if (
+      !noted ||
+      noted.kind !== "importItem" ||
+      noted.amount !== amount ||
+      noted.itemId !== itemId ||
+      noted.tokenId !== tokenId
+    ) {
+      return { ok: false, error: "item import nonce is not a recorded custody inbound" };
+    }
+    const res = this.apply({ op: "importItem", tokenId, itemId, amount, nonce });
+    if (res.ok) this.custody.delete(key);
+    return res;
+  }
+
+  private custodyKey(tokenId: string, nonce: string): string {
+    return tokenId + ":" + nonce;
   }
 
   exportItem(tokenId: string, itemId: string, amount: string): LokResult {

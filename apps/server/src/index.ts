@@ -450,30 +450,14 @@ function tellToken(tokenId: string, message: string) {
   }
 }
 
-function handleLokImport(p: Player, tokenId: number, amount: number) {
-  const token = lokToken(p);
-  if (!token) {
-    pushLog(p, "Could not open your log identity.");
-    return;
-  }
-  if (!takeItem(p.inventory, tokenId, amount)) {
-    pushLog(p, "You are not holding that many.");
-    return;
-  }
-  const stillEquipped = Object.values(p.equip).includes(tokenId) && invAmount(p.inventory, tokenId) <= 0;
-  if (stillEquipped) {
-    addItem(p.inventory, tokenId, amount);
-    pushLog(p, "Unequip " + itemLabel(tokenId) + " before importing the last one.");
-    return;
-  }
-  const res = lok.importItem(token, String(tokenId), String(amount));
-  if (!res.ok) {
-    addItem(p.inventory, tokenId, amount);
-    pushLog(p, res.error);
-    return;
-  }
-  pushLog(p, "Imported " + itemLabel(tokenId) + " x" + amount + " into the log.");
-  send(p.ws, snapshotFor(p));
+function handleLokImport(p: Player, _tokenId: number, _amount: number) {
+  // The client must not credit items. A credit requires a nonce the server recorded from
+  // custody, and no vault or item watcher is wired, so this message never has one.
+  // Nothing is taken from the bag.
+  pushLog(
+    p,
+    "Import is not available from the client. Items enter the log only after the server records a custody nonce. Nothing was moved.",
+  );
 }
 
 function handleLokExport(p: Player, tokenId: number, amount: number) {
@@ -2422,7 +2406,7 @@ function handleNpcInteract(p: Player, npcId: string) {
       crafter:
         "Bring base mats from the field. Synth at my bench — I'll rank your crafts as you work.",
       vendor:
-        "The camp ledger is here. Import what you hold, then send it or list it. KEK only arrives as a Robinhood vault deposit — I cannot mint it.",
+        "The camp ledger is here. Send or list what the log already holds. Items and KEK enter only from a custody nonce the server recorded — I cannot mint them, and this counter cannot.",
     };
     send(p.ws, {
       type: "npc/dialog",

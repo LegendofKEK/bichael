@@ -10,6 +10,21 @@ fn n(v: u64) -> U256 {
     U256::from_u64(v)
 }
 
+fn next_inbound(world: &World, token: U256) -> u64 {
+    world.inbound_applied(&token).unwrap_or(0).saturating_add(1)
+}
+
+fn deposit(world: &mut World, token: U256, amount: U256) -> Result<lok_engine::AppliedEvent, EngineError> {
+    let nonce = next_inbound(world, token);
+    world.append_deposit_kek(token, amount, nonce)
+}
+
+fn import_item(world: &mut World, token: U256, item: U256, amount: U256) -> Result<lok_engine::AppliedEvent, EngineError> {
+    let nonce = next_inbound(world, token);
+    world.append_import_item(token, item, amount, nonce)
+}
+
+
 fn two_characters() -> World {
     let mut world = World::new();
     world.append_spawn(n(1), 3).unwrap();
@@ -21,8 +36,8 @@ fn two_characters() -> World {
 fn happy_transfer_moves_kek_and_items_with_no_fee() {
     let ore = fungible_id("iron_ore");
     let mut world = two_characters();
-    world.append_deposit_kek(n(1), n(10)).unwrap();
-    world.append_import_item(n(1), ore, n(3)).unwrap();
+    deposit(&mut world, n(1), n(10)).unwrap();
+    import_item(&mut world, n(1), ore, n(3)).unwrap();
     world.append_send_kek(n(1), n(2), n(4)).unwrap();
     world.append_send_item(n(1), n(2), ore, n(2)).unwrap();
 
@@ -46,7 +61,7 @@ fn happy_transfer_moves_kek_and_items_with_no_fee() {
 #[test]
 fn overspend_is_rejected_and_does_not_append() {
     let mut world = two_characters();
-    world.append_deposit_kek(n(1), n(5)).unwrap();
+    deposit(&mut world, n(1), n(5)).unwrap();
     let before_len = world.len();
     let before_head = world.head();
     let err = world.append_send_kek(n(1), n(2), n(6)).unwrap_err();
@@ -101,9 +116,9 @@ fn list_outbid_and_settle_conserves_kek() {
     let sword = unique_id("iron_sword", 42);
     let mut world = two_characters();
     world.append_spawn(n(3), 2).unwrap();
-    world.append_import_item(n(1), sword, n(1)).unwrap();
-    world.append_deposit_kek(n(2), n(100)).unwrap();
-    world.append_deposit_kek(n(3), n(250)).unwrap();
+    import_item(&mut world, n(1), sword, n(1)).unwrap();
+    deposit(&mut world, n(2), n(100)).unwrap();
+    deposit(&mut world, n(3), n(250)).unwrap();
 
     world.append_list(n(7), n(1), sword, n(1)).unwrap();
     assert_eq!(world.item_balance(&n(1), &sword), Some(n(0)));
@@ -149,8 +164,8 @@ fn list_outbid_and_settle_conserves_kek() {
 fn cancel_with_a_bid_returns_item_and_unlocks_kek() {
     let sword = unique_id("iron_sword", 7);
     let mut world = two_characters();
-    world.append_import_item(n(1), sword, n(1)).unwrap();
-    world.append_deposit_kek(n(2), n(80)).unwrap();
+    import_item(&mut world, n(1), sword, n(1)).unwrap();
+    deposit(&mut world, n(2), n(80)).unwrap();
     world.append_list(n(4), n(1), sword, n(1)).unwrap();
     world.append_bid(n(4), n(2), n(80)).unwrap();
     assert_eq!(world.append_cancel(n(4), n(2)).unwrap_err(), EngineError::NotSeller);
@@ -170,7 +185,7 @@ fn cancel_with_a_bid_returns_item_and_unlocks_kek() {
 fn double_list_is_rejected() {
     let ore = fungible_id("iron_ore");
     let mut world = two_characters();
-    world.append_import_item(n(1), ore, n(5)).unwrap();
+    import_item(&mut world, n(1), ore, n(5)).unwrap();
     world.append_list(n(1), n(1), ore, n(2)).unwrap();
     let err = world.append_list(n(2), n(1), ore, n(1)).unwrap_err();
     assert_eq!(err, EngineError::AlreadyListed);
@@ -183,7 +198,7 @@ fn double_list_is_rejected() {
 #[test]
 fn replay_cli_stops_at_the_first_bad_world_hash() {
     let mut world = two_characters();
-    world.append_deposit_kek(n(1), n(5)).unwrap();
+    deposit(&mut world, n(1), n(5)).unwrap();
     let doc = world.to_document();
     let spawn = doc.characters.iter().find(|ch| ch.token_id == n(1)).unwrap().entries[0].clone();
     let mut bad = spawn.hash;
@@ -202,12 +217,12 @@ fn replay_cli_stops_at_the_first_bad_world_hash() {
                 {
                     "seq": 1,
                     "hash": format!("0x{}", hex::encode(bad)),
-                    "input": { "type": "depositKek", "tokenId": "1", "amount": "1" }
+                    "input": { "type": "depositKek", "tokenId": "1", "amount": "1", "nonce": "1" }
                 },
                 {
                     "seq": 2,
                     "hash": "0x0000000000000000000000000000000000000000000000000000000000000000",
-                    "input": { "type": "depositKek", "tokenId": "1", "amount": "1" }
+                    "input": { "type": "depositKek", "tokenId": "1", "amount": "1", "nonce": "1" }
                 }
             ]
         }]

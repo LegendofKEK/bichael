@@ -283,8 +283,9 @@ contract CharacterCheckpoint is
         }
     }
 
-    /// Burn a wallet item and queue it for re-entry. The server attests it into the log as an Import event; the next
-    /// checkpoint's `inboundConsumed` proves it was applied. Watchers cross-check the log against these events.
+    /// Burn a wallet item and queue it for re-entry. The emitted nonce is this token's next inbound id, shared with
+    /// KEK deposits. The engine must apply that nonce once, in order; the next checkpoint's `inboundConsumed` is how
+    /// many of those ids the log has consumed. Watchers cross-check the log against these events.
     /// A pending import travels with the character if it is transferred before the log applies it.
     function importItem(uint256 tokenId, uint256 itemId, uint32 amount) external whenNotPaused nonReentrant {
         if (address(items) == address(0)) revert NotConfigured();
@@ -299,7 +300,7 @@ contract CharacterCheckpoint is
     }
 
     /// Deposit KEK into the vault; the engine credits the character's in-game KEK counter when the log applies the
-    /// event. Approve the VAULT (not this contract) first. Shares the inbound queue with item imports.
+    /// event carrying this nonce. Approve the VAULT (not this contract) first. Shares the inbound queue with item imports.
     function depositKek(uint256 tokenId, uint256 amount) external whenNotPaused nonReentrant {
         if (address(vault) == address(0)) revert NotConfigured();
         if (nft.ownerOf(tokenId) != msg.sender) revert NotOwner();
