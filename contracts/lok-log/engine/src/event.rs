@@ -19,6 +19,9 @@ pub enum Input {
     /// Decreases spendable KEK. Escrowed bids are not spendable, so they cannot be withdrawn.
     /// This is the log image of `kekOut`. It does not submit an onchain withdrawal.
     WithdrawKek { token_id: U256, amount: U256 },
+    /// In-game price. Debits spendable KEK only. Escrowed bids stay locked.
+    /// Not a mint, not `kekOut`, and not an onchain withdrawal.
+    SpendKek { token_id: U256, amount: U256 },
     SendItem { from: U256, to: U256, item_id: U256, amount: U256 },
     SendKek { from: U256, to: U256, amount: U256 },
     List { listing_id: U256, seller: U256, item_id: U256, amount: U256 },
@@ -89,6 +92,11 @@ pub fn event_id(input: &Input) -> [u8; 32] {
         }
         Input::WithdrawKek { token_id, amount } => {
             buf.b256(&domain(b"LOK_WITHDRAW_KEK_V1"));
+            buf.u256(token_id);
+            buf.u256(amount);
+        }
+        Input::SpendKek { token_id, amount } => {
+            buf.b256(&domain(b"LOK_SPEND_KEK_V1"));
             buf.u256(token_id);
             buf.u256(amount);
         }

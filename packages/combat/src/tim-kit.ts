@@ -1,7 +1,7 @@
 import { isTrainerFreeAbility, trainerAbilityDustCost } from "./trainer";
 /**
  * Full Time Mage ability kit (design §9), with MVP-feel numbers where noted.
- * Non-starter abilities are bought from the Trainer (Dust 500–10000).
+ * Non-starter abilities are bought from the Trainer (deposited KEK 500–10000). Dust is no longer the spend currency.
  * Free starter: Rest, Flux, Temporal Distortion (see trainer.ts).
  */
 
@@ -567,7 +567,7 @@ export function isTimSpell(id: TimAbilityId): boolean {
   return cat === "time" || cat === "enhance" || cat === "enfeeble" || cat === "heal";
 }
 
-/** Dust cost to learn a spell scroll. */
+/** KEK cost to learn a spell scroll. Dust is no longer the spend currency. */
 export function timSpellDustCost(id: TimAbilityId): number {
   return trainerAbilityDustCost(TIM_ABILITIES[id].unlockLevel);
 }

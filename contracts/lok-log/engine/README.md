@@ -55,6 +55,7 @@ Exit 0 prints the head, state root, and summary. Exit 1 is a bad hash. Exit 2 is
 | `append_spawn` | `spawn` | that character |
 | `append_deposit_kek` | `depositKek` (vault deposit already happened; not a mint; `nonce` is the next inbound id) | that character |
 | `append_withdraw_kek` | `withdrawKek` (spendable only; not an onchain withdrawal) | that character |
+| `append_spend_kek` | `spendKek` (spendable only; in-game price; not `kekOut`; not a mint) | that character |
 | `append_import_item` | `importItem` (same per-character inbound nonce sequence as `depositKek`) | that character |
 | `append_export_item` | `exportItem` (spendable balance only) | that character |
 | `append_send_item` | `sendItem` | sender and recipient |
@@ -70,7 +71,7 @@ The payload (and therefore `event_id`) is the same on every log that carries the
 
 Reads: `kek_balance` (spendable), `solvency_kek` (spendable + escrowed bids), `item_balance`, `listing`, `listings`. `apply` is the same append path with an `Input`.
 
-Listing escrows the item out of the seller's spendable balance, so that quantity cannot be transferred, exported, or listed again. A bid escrows that much KEK. A strictly higher bid unlocks the previous bid first. Cancel is seller-only: the item returns and the high bid unlocks. Settle pays the seller the high bid and gives the item to the winner, with nothing left in escrow. Sender and recipient must already be spawned. Sending to yourself fails. A short balance, including a withdraw that would spend escrowed KEK, fails closed and is not appended.
+Listing escrows the item out of the seller's spendable balance, so that quantity cannot be transferred, exported, or listed again. A bid escrows that much KEK. A strictly higher bid unlocks the previous bid first. Cancel is seller-only: the item returns and the high bid unlocks. Settle pays the seller the high bid and gives the item to the winner, with nothing left in escrow. Sender and recipient must already be spawned. Sending to yourself fails. A short balance, including a withdraw or spend that would take escrowed KEK, fails closed and is not appended. `spendKek` debits spendable KEK and does not mint. It is not `kekOut`.
 
 `lok-replay` of a document with `"type": "characters"` replays those chains and still stops at the first bad hash (exit 1) before applying it or anything after it. An empty legacy `{"type":"world","entries":[]}` file still opens. A non-empty legacy world log is refused, because that single chain cannot be split into per-character checkpoints.
 

@@ -187,6 +187,14 @@ export class LokWorld {
     return this.apply({ op: "withdrawKek", tokenId, amount });
   }
 
+  /**
+   * Spend deposited KEK on an in-game price. Debits spendable balance only.
+   * Escrowed bids stay locked. Does not mint and does not withdraw.
+   */
+  spendKek(tokenId: string, amount: string): LokResult {
+    return this.apply({ op: "spendKek", tokenId, amount });
+  }
+
   /** Record the next level. Rejects a skip. Does not mint KEK. */
   levelUp(tokenId: string, level: number): LokResult {
     return this.apply({ op: "levelUp", tokenId, level });

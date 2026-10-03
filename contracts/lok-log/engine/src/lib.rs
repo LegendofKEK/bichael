@@ -4,8 +4,10 @@
 //! `test/golden/verify.mjs`. The game server calls this crate (wasm gate) for every item and KEK move.
 //! KEK is deposit-only: a character log credits it only as a vault deposit, and
 //! transfers cannot create it. `WithdrawKek` decreases spendable KEK and does not
-//! submit an onchain withdrawal. Level-up, ability, craft, harvest, and item-drop
-//! events are per character and do not mint KEK. Each character has their own hash chain.
+//! submit an onchain withdrawal. `SpendKek` debits spendable KEK for an in-game
+//! price, leaves escrowed bids locked, is not `kekOut`, and does not mint.
+//! Level-up, ability, craft, harvest, and item-drop events are per character and
+//! do not mint KEK. Each character has their own hash chain.
 //! A KEK deposit or item import carries that character's inbound nonce and is rejected
 //! if the same nonce is applied again. The nonce must be the next one (`inboundCount`).
 
