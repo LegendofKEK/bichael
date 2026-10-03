@@ -102,6 +102,7 @@ import {
   emptyCraftSkills,
   emptyEquipment,
   getCraftableItem,
+  EQUIP_SLOTS,
   getItem,
   ownedMatQty,
   pickAffordableMaterials,
@@ -110,6 +111,16 @@ import {
   type CraftSkill,
   type ItemDef,
 } from "@bellgrave/items";
+import {
+  STARTER_POTION_AMOUNT,
+  STARTER_POTION_ID,
+  STARTER_WEAPON,
+  addStack,
+  discardStack,
+  stackAmount,
+  starterAmount,
+  takeStack,
+} from "./starter-kit";
 import { createPaleHollowMobs, createPaleHollowNodes, relocateGatherNode, type FieldNode } from "./pale-hollow-world";
 import {
   MOB_CAST_ANIM_MS,
@@ -517,7 +528,16 @@ function tellToken(tokenId: string, message: string) {
   }
 }
 
-function handleLokImport(p: Player, _tokenId: number, _amount: number) {
+function handleLokImport(p: Player, tokenId: number, amount: number) {
+  const starter = starterAmount(p.inventory, tokenId);
+  const plain = stackAmount(p.inventory, tokenId) - starter;
+  if (starter > 0 && amount > plain) {
+    pushLog(
+      p,
+      "Starter gear cannot be imported, listed, traded, or exported. Discard it from your bag if you do not want it. Nothing was moved.",
+    );
+    return;
+  }
   // The client must not credit items. A credit requires a nonce the server recorded from
   // custody, and no vault or item watcher is wired, so this message never has one.
   // Nothing is taken from the bag.
@@ -1542,24 +1562,15 @@ function send(ws: WebSocket, msg: ServerMessage) {
 }
 
 function invAmount(inv: InventorySlot[], tokenId: number): number {
-  return inv.find((i) => i.tokenId === tokenId)?.amount ?? 0;
+  return stackAmount(inv, tokenId);
 }
 
 function addItem(inv: InventorySlot[], tokenId: number, amount: number) {
-  const row = inv.find((i) => i.tokenId === tokenId);
-  if (row) row.amount += amount;
-  else inv.push({ tokenId, amount });
+  addStack(inv, tokenId, amount, false);
 }
 
 function takeItem(inv: InventorySlot[], tokenId: number, amount: number): boolean {
-  const row = inv.find((i) => i.tokenId === tokenId);
-  if (!row || row.amount < amount) return false;
-  row.amount -= amount;
-  if (row.amount <= 0) {
-    const idx = inv.indexOf(row);
-    inv.splice(idx, 1);
-  }
-  return true;
+  return takeStack(inv, tokenId, amount);
 }
 
 function playerBuffs(p: Player): UnitSnapshot["buffs"] {
@@ -2280,24 +2291,32 @@ function rewardMobKill(p: Player, mob: Mob, now: number) {
 }
 
 function claimStarter(p: Player) {
-  if (p.claimedStarter) {
-    pushLog(p, "Starter already claimed.");
-    return;
-  }
-  addItem(p.inventory, ITEM.STAFF_ASHBEAM, 1);
-  addItem(p.inventory, ITEM.ROBE_LINEN, 1);
-  addItem(p.inventory, ITEM.SWORD_IRON, 1);
-  addItem(p.inventory, ITEM.MAIL_IRON, 1);
-  addItem(p.inventory, ITEM.POTION, 3);
+  if (p.claimedStarter) return;
+  const weapon = STARTER_WEAPON[p.job];
+  addStack(p.inventory, weapon.tokenId, 1, true);
+  addStack(p.inventory, STARTER_POTION_ID, STARTER_POTION_AMOUNT, true);
   p.claimedStarter = true;
-  // Default TIM loadout; Job Master can swap to Knight gear
-  p.equip.main = ITEM.STAFF_ASHBEAM;
-  p.equip.body = ITEM.ROBE_LINEN;
-  p.dust += 80;
+  p.equip.main = weapon.tokenId;
+  // Not written to the log. A later real drop of the same id is a separate, sellable stack.
   pushLog(
     p,
-    "Claimed starter: staff, robe, sword, mail, Potion x3, +80 Dust. Speak with the Job Master in the Dwellings.",
+    "Starter kit: " + weapon.name + " and Potion x" + STARTER_POTION_AMOUNT + ". You can discard it. It cannot be imported, listed, traded, or exported.",
   );
+}
+
+function handleDiscard(p: Player, tokenId: number, starter: boolean) {
+  const removed = discardStack(p.inventory, tokenId, starter);
+  if (removed <= 0) {
+    pushLog(p, "Nothing to discard.");
+    return;
+  }
+  if (invAmount(p.inventory, tokenId) <= 0) {
+    for (const slot of EQUIP_SLOTS) {
+      if (p.equip[slot] === tokenId) p.equip[slot] = null;
+    }
+  }
+  pushLog(p, "Discarded " + itemLabel(tokenId) + " x" + removed + ".");
+  send(p.ws, snapshotFor(p));
 }
 
 function stopRest(p: Player, reason?: string) {
@@ -3896,6 +3915,7 @@ function onMessage(ws: WebSocket, data: string) {
     const gender =
       msg.gender === "female" ? "female" : msg.gender === "pepeka" ? "pepeka" : "male";
     const p = createPlayer(wallet, msg.name, ws, job, gender);
+    claimStarter(p);
     const minted = lok.tokenFor(p.charId);
     if (minted) {
       void linkCharacterNft(minted, JOB_IDS.indexOf(job)).then((res) => {
@@ -3906,7 +3926,7 @@ function onMessage(ws: WebSocket, data: string) {
     }
     pushLog(
       p,
-      `${JOBS[job].name} created. Claim starter. At L${SUBJOB_UNLOCK_LEVEL}+ the Job Master sets a support job (half level).`,
+      `${JOBS[job].name} created. At L${SUBJOB_UNLOCK_LEVEL}+ the Job Master sets a support job (half level).`,
     );
     send(ws, snapshotFor(p));
     return;
@@ -3992,6 +4012,9 @@ function onMessage(ws: WebSocket, data: string) {
     case "item/use":
       stopRest(p);
       handleUseItem(p, msg.tokenId);
+      break;
+    case "item/discard":
+      handleDiscard(p, msg.tokenId, !!msg.starter);
       break;
     case "npc/interact":
       handleNpcInteract(p, msg.npcId);

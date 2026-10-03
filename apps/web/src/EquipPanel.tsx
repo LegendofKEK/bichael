@@ -79,7 +79,7 @@ function isMatKind(kind: string | undefined): boolean {
   return kind === "base" || kind === "intermediate" || kind === "filler" || kind === "bait";
 }
 
-type BagRow = { tokenId: number; amount: number };
+type BagRow = { tokenId: number; amount: number; starter?: boolean };
 
 type SlotDef = { id: EquipSlot; label: string };
 
@@ -276,7 +276,7 @@ export function EquipPanel({ you, me, onClose }: Props) {
             <div className="equip-bag-list">
               {gearRows.length === 0 && <div className="craft-empty">No gear or consumables</div>}
               {gearRows.map((i) => (
-                <BagItemRow key={i.tokenId} item={i} you={you} showActions />
+                <BagItemRow key={i.tokenId + (i.starter ? "-starter" : "")} item={i} you={you} showActions />
               ))}
             </div>
           </div>
@@ -308,7 +308,7 @@ function BagItemRow({
   const statsLine = formatPrimaryEffects(def?.stats, def?.consume?.hp);
   const jobsLine = formatJobs(def?.jobRestrict);
   const ilevel = def?.craftLevel;
-  const actions = showActions ? bagItemActions(item.tokenId, you) : null;
+  const actions = showActions ? bagItemActions(item, you) : null;
   const equipped = Object.values(you.equip).includes(item.tokenId);
 
   return (
@@ -325,7 +325,7 @@ function BagItemRow({
       />
       <div className="equip-bag-card-body">
         <div className="equip-item-name">
-          {itemName(item.tokenId)}
+          {itemName(item.tokenId)}{item.starter ? " (starter)" : ""}
           <span className="equip-item-qty"> x{item.amount}</span>
         </div>
         {statsLine ? <div className="equip-item-stats">{statsLine}</div> : null}
@@ -347,7 +347,8 @@ function itemJobKey(job: string): string {
   return job;
 }
 
-function bagItemActions(tokenId: number, you: SnapshotMessage["you"]) {
+function bagItemActions(item: BagRow, you: SnapshotMessage["you"]) {
+  const tokenId = item.tokenId;
   const def = getItem(tokenId);
   const btns: { key: string; label: string; onClick: () => void; disabled?: boolean; title?: string }[] = [];
 
@@ -384,6 +385,12 @@ function bagItemActions(tokenId: number, you: SnapshotMessage["you"]) {
       onClick: () => send({ type: "item/use", tokenId }),
     });
   }
+  btns.push({
+    key: "discard",
+    label: "Discard",
+    title: item.starter ? "Starter gear cannot be sold or exported. Discard destroys it." : "Destroy this stack",
+    onClick: () => send({ type: "item/discard", tokenId, starter: !!item.starter }),
+  });
   if (!btns.length) return null;
   return (
     <div className="equip-bag-card-actions">

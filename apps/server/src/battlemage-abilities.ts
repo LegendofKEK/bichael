@@ -7,7 +7,7 @@ import {
   isBattleMageAbilityId,
   type BattleMageAbilityId,
 } from "@bellgrave/combat";
-import { ITEM } from "@bellgrave/config";
+import { SIGNATURE_WEAPON_IDS, signatureWeaponEquipped } from "./starter-kit";
 import type { AbilityId } from "@bellgrave/protocol";
 
 export type BattleMagePlayer = {
@@ -99,12 +99,9 @@ export type BattleMageHooks = {
   };
 };
 
-function invAmount(inv: BattleMagePlayer["inventory"], tokenId: number): number {
-  return inv.find((i) => i.tokenId === tokenId)?.amount ?? 0;
-}
 
 export function swordEquipped(p: BattleMagePlayer): boolean {
-  return p.equip.main === ITEM.SWORD_IRON && invAmount(p.inventory, ITEM.SWORD_IRON) > 0;
+  return signatureWeaponEquipped(p, SIGNATURE_WEAPON_IDS.battle_mage);
 }
 
 export function battleMagePhysDtMul(p: BattleMagePlayer, now: number): number {

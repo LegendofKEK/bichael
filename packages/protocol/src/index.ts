@@ -42,6 +42,12 @@ export const ClientMessageSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("ability"), id: AbilityId, targetId: z.string().optional() }),
   z.object({ type: z.literal("equip"), slot: EquipSlot, tokenId: z.number().nullable() }),
   z.object({ type: z.literal("item/use"), tokenId: z.number() }),
+  /** Throw away one bag stack. Starter stacks are allowed. This is not a sale and is not written to the log. */
+  z.object({
+    type: z.literal("item/discard"),
+    tokenId: z.number().int().positive(),
+    starter: z.boolean().optional(),
+  }),
   z.object({ type: z.literal("claim/starter") }),
   /** Change main job (Job Master). Sprite follows main. */
   z.object({ type: z.literal("job/change"), job: JobId }),
@@ -274,7 +280,7 @@ export type UnitSnapshot = {
   deathAt?: number;
 };
 
-export type InventorySlot = { tokenId: number; amount: number };
+export type InventorySlot = { tokenId: number; amount: number; starter?: boolean };
 
 
 export type PartyMemberSnapshot = {

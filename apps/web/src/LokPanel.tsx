@@ -111,19 +111,29 @@ export function LokPanel({ you, onClose }: Props) {
         </div>
       ))}
 
-      <div className="cmd-section-label">Bag · import</div>
+            <div className="cmd-section-label">Bag ? import</div>
       {you.inventory.length === 0 && <p className="lok-note">Bag is empty.</p>}
       {you.inventory.map((row) => (
-        <div className="lok-row" key={"bag-" + row.tokenId}>
+        <div className="lok-row" key={"bag-" + row.tokenId + (row.starter ? "-starter" : "")}>
           <span>
             {itemName(row.tokenId)} x{row.amount}
+            {row.starter ? " (starter)" : ""}
           </span>
           <button
             type="button"
             className="cmd-pill-tab"
+            disabled={!!row.starter}
+            title={row.starter ? "Starter gear cannot be imported, listed, traded, or exported." : undefined}
             onClick={() => send({ type: "lok/import", tokenId: row.tokenId, amount: row.amount })}
           >
             Import
+          </button>
+          <button
+            type="button"
+            className="cmd-pill-tab"
+            onClick={() => send({ type: "item/discard", tokenId: row.tokenId, starter: !!row.starter })}
+          >
+            Discard
           </button>
         </div>
       ))}

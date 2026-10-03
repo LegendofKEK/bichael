@@ -7,7 +7,7 @@ import {
   isKnightAbilityId,
   type KnightAbilityId,
 } from "@bellgrave/combat";
-import { ITEM } from "@bellgrave/config";
+import { SIGNATURE_WEAPON_IDS, signatureWeaponEquipped } from "./starter-kit";
 import type { AbilityId } from "@bellgrave/protocol";
 
 export type KnightPlayer = {
@@ -76,12 +76,9 @@ export type KnightHooks = {
   };
 };
 
-function invAmount(inv: KnightPlayer["inventory"], tokenId: number): number {
-  return inv.find((i) => i.tokenId === tokenId)?.amount ?? 0;
-}
 
 export function swordEquipped(p: KnightPlayer): boolean {
-  return p.equip.main === ITEM.SWORD_IRON && invAmount(p.inventory, ITEM.SWORD_IRON) > 0;
+  return signatureWeaponEquipped(p, SIGNATURE_WEAPON_IDS.knight);
 }
 
 /** Combined physical damage-taken multiplier from Knight DT buffs. */
