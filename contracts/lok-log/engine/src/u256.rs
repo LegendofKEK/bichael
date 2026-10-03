@@ -21,6 +21,40 @@ impl U256 {
         Self(a)
     }
 
+    pub fn checked_add(self, other: Self) -> Option<Self> {
+        let mut out = [0u8; 32];
+        let mut carry = 0u16;
+        for i in (0..32).rev() {
+            let sum = u16::from(self.0[i]) + u16::from(other.0[i]) + carry;
+            out[i] = sum as u8;
+            carry = sum >> 8;
+        }
+        if carry != 0 {
+            None
+        } else {
+            Some(Self(out))
+        }
+    }
+
+    pub fn checked_sub(self, other: Self) -> Option<Self> {
+        if self < other {
+            return None;
+        }
+        let mut out = [0u8; 32];
+        let mut borrow = 0i16;
+        for i in (0..32).rev() {
+            let mut diff = i16::from(self.0[i]) - i16::from(other.0[i]) - borrow;
+            if diff < 0 {
+                diff += 256;
+                borrow = 1;
+            } else {
+                borrow = 0;
+            }
+            out[i] = diff as u8;
+        }
+        Some(Self(out))
+    }
+
     pub fn bitor(self, other: Self) -> Self {
         let mut a = [0u8; 32];
         for i in 0..32 {

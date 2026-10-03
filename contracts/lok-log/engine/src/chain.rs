@@ -3,6 +3,7 @@
 use crate::engine::{Engine, EngineError};
 use crate::event::{entry_hash, Input};
 use crate::u256::{parse_b256, U256};
+use crate::world::{CharacterSnapshot, World};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Entry {
@@ -81,6 +82,24 @@ pub enum ReplayStop {
     },
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct WorldDocument {
+    pub entries: Vec<LoggedEntry>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct WorldReplayReport {
+    pub entries: u64,
+    pub head: [u8; 32],
+    pub characters: Vec<CharacterSnapshot>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum AnyLog {
+    Character(LogDocument),
+    World(WorldDocument),
+}
+
 /// Replay `doc` from the genesis anchor. On a hash mismatch, return immediately:
 /// that event is not applied, and later events are not inspected.
 pub fn replay(doc: &LogDocument) -> Result<ReplayReport, ReplayStop> {
@@ -107,6 +126,30 @@ pub fn replay(doc: &LogDocument) -> Result<ReplayReport, ReplayStop> {
     })
 }
 
+/// Replay a world log from LOK_WORLD_V1. A bad hash is not applied, and later events are not inspected.
+pub fn replay_world(doc: &WorldDocument) -> Result<WorldReplayReport, ReplayStop> {
+    let mut world = World::new();
+    for (i, entry) in doc.entries.iter().enumerate() {
+        let index = i as u64;
+        let computed = entry_hash(&world.head(), index, &entry.input);
+        if computed != entry.hash {
+            return Err(ReplayStop::BadHash {
+                index,
+                expected: entry.hash,
+                computed,
+            });
+        }
+        world
+            .apply(entry.input.clone())
+            .map_err(|reason| ReplayStop::Rejected { index, reason })?;
+    }
+    Ok(WorldReplayReport {
+        entries: world.len(),
+        head: world.head(),
+        characters: world.snapshots(),
+    })
+}
+
 pub fn parse_log(text: &str) -> Result<LogDocument, String> {
     let value: serde_json::Value = serde_json::from_str(text).map_err(|e| e.to_string())?;
     let token_id = value
@@ -120,6 +163,32 @@ pub fn parse_log(text: &str) -> Result<LogDocument, String> {
     if starting_job > u64::from(u8::MAX) {
         return Err("startingJob out of range".to_string());
     }
+    let entries = parse_entries(&value)?;
+    Ok(LogDocument {
+        token_id,
+        starting_job: starting_job as u8,
+        entries,
+    })
+}
+
+pub fn parse_world_log(text: &str) -> Result<WorldDocument, String> {
+    let value: serde_json::Value = serde_json::from_str(text).map_err(|e| e.to_string())?;
+    if value.get("type").and_then(|v| v.as_str()) != Some("world") {
+        return Err("not a world log".to_string());
+    }
+    Ok(WorldDocument { entries: parse_entries(&value)? })
+}
+
+pub fn parse_any_log(text: &str) -> Result<AnyLog, String> {
+    let value: serde_json::Value = serde_json::from_str(text).map_err(|e| e.to_string())?;
+    if value.get("type").and_then(|v| v.as_str()) == Some("world") {
+        Ok(AnyLog::World(parse_world_log(text)?))
+    } else {
+        Ok(AnyLog::Character(parse_log(text)?))
+    }
+}
+
+fn parse_entries(value: &serde_json::Value) -> Result<Vec<LoggedEntry>, String> {
     let arr = value
         .get("entries")
         .and_then(|v| v.as_array())
@@ -137,11 +206,14 @@ pub fn parse_log(text: &str) -> Result<LogDocument, String> {
         let input = parse_input(input_v).map_err(|e| format!("entry {i}: {e}"))?;
         entries.push(LoggedEntry { hash, input });
     }
-    Ok(LogDocument {
-        token_id,
-        starting_job: starting_job as u8,
-        entries,
-    })
+    Ok(entries)
+}
+
+fn req_u256(value: &serde_json::Value, key: &str) -> Result<U256, String> {
+    value
+        .get(key)
+        .ok_or_else(|| format!("missing {key}"))
+        .and_then(parse_u256_json)
 }
 
 fn parse_input(value: &serde_json::Value) -> Result<Input, String> {
@@ -151,10 +223,7 @@ fn parse_input(value: &serde_json::Value) -> Result<Input, String> {
         .ok_or_else(|| "input missing type".to_string())?;
     match kind {
         "spawn" => {
-            let token_id = value
-                .get("tokenId")
-                .ok_or_else(|| "spawn missing tokenId".to_string())
-                .and_then(parse_u256_json)?;
+            let token_id = req_u256(value, "tokenId")?;
             let starting_job = value
                 .get("startingJob")
                 .and_then(|v| v.as_u64())
@@ -167,6 +236,49 @@ fn parse_input(value: &serde_json::Value) -> Result<Input, String> {
                 starting_job: starting_job as u8,
             })
         }
+        "depositKek" => Ok(Input::DepositKek {
+            token_id: req_u256(value, "tokenId")?,
+            amount: req_u256(value, "amount")?,
+        }),
+        "importItem" => Ok(Input::ImportItem {
+            token_id: req_u256(value, "tokenId")?,
+            item_id: req_u256(value, "itemId")?,
+            amount: req_u256(value, "amount")?,
+        }),
+        "exportItem" => Ok(Input::ExportItem {
+            token_id: req_u256(value, "tokenId")?,
+            item_id: req_u256(value, "itemId")?,
+            amount: req_u256(value, "amount")?,
+        }),
+        "sendItem" => Ok(Input::SendItem {
+            from: req_u256(value, "from")?,
+            to: req_u256(value, "to")?,
+            item_id: req_u256(value, "itemId")?,
+            amount: req_u256(value, "amount")?,
+        }),
+        "sendKek" => Ok(Input::SendKek {
+            from: req_u256(value, "from")?,
+            to: req_u256(value, "to")?,
+            amount: req_u256(value, "amount")?,
+        }),
+        "list" => Ok(Input::List {
+            listing_id: req_u256(value, "listingId")?,
+            seller: req_u256(value, "seller")?,
+            item_id: req_u256(value, "itemId")?,
+            amount: req_u256(value, "amount")?,
+        }),
+        "bid" => Ok(Input::Bid {
+            listing_id: req_u256(value, "listingId")?,
+            bidder: req_u256(value, "bidder")?,
+            amount: req_u256(value, "amount")?,
+        }),
+        "cancel" => Ok(Input::Cancel {
+            listing_id: req_u256(value, "listingId")?,
+            seller: req_u256(value, "seller")?,
+        }),
+        "settle" => Ok(Input::Settle {
+            listing_id: req_u256(value, "listingId")?,
+        }),
         other => Err(format!("unknown input type {other}")),
     }
 }
