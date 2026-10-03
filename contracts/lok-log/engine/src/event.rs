@@ -14,6 +14,9 @@ pub enum Input {
     ImportItem { token_id: U256, item_id: U256, amount: U256 },
     /// Burns spendable items out of the log (the export side of a checkpoint). Escrowed listings are not spendable.
     ExportItem { token_id: U256, item_id: U256, amount: U256 },
+    /// Decreases spendable KEK. Escrowed bids are not spendable, so they cannot be withdrawn.
+    /// This is the log image of `kekOut`. It does not submit an onchain withdrawal.
+    WithdrawKek { token_id: U256, amount: U256 },
     SendItem { from: U256, to: U256, item_id: U256, amount: U256 },
     SendKek { from: U256, to: U256, amount: U256 },
     List { listing_id: U256, seller: U256, item_id: U256, amount: U256 },
@@ -61,6 +64,11 @@ pub fn event_id(input: &Input) -> [u8; 32] {
             buf.b256(&domain(b"LOK_EXPORT_ITEM_V1"));
             buf.u256(token_id);
             buf.u256(item_id);
+            buf.u256(amount);
+        }
+        Input::WithdrawKek { token_id, amount } => {
+            buf.b256(&domain(b"LOK_WITHDRAW_KEK_V1"));
+            buf.u256(token_id);
             buf.u256(amount);
         }
         Input::SendItem { from, to, item_id, amount } => {

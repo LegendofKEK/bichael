@@ -1,50 +1,30 @@
-//! Item and KEK transfers, and the auction house, on the world log.
+//! Item and KEK transfers, and the auction house, on per-character logs.
 
 use std::process::Command;
 
 use lok_engine::{
-    entry_hash, fungible_id, replay_world, unique_id, Engine, EngineError, Input, LoggedEntry,
-    Outcome, ReplayStop, U256, World, WorldDocument,
+    entry_hash, fungible_id, replay_world, unique_id, EngineError, Input, U256, World,
 };
 
 fn n(v: u64) -> U256 {
     U256::from_u64(v)
 }
 
-fn record(world: &mut World, entries: &mut Vec<LoggedEntry>, input: Input) -> Outcome {
-    let outcome = world.apply(input.clone()).expect("apply");
-    let Outcome::Applied { entry_hash, .. } = &outcome;
-    entries.push(LoggedEntry {
-        hash: *entry_hash,
-        input,
-    });
-    outcome
-}
-
-fn two_characters() -> (World, Vec<LoggedEntry>) {
+fn two_characters() -> World {
     let mut world = World::new();
-    let mut entries = Vec::new();
-    record(&mut world, &mut entries, Input::Spawn { token_id: n(1), starting_job: 3 });
-    record(&mut world, &mut entries, Input::Spawn { token_id: n(2), starting_job: 1 });
-    (world, entries)
+    world.append_spawn(n(1), 3).unwrap();
+    world.append_spawn(n(2), 1).unwrap();
+    world
 }
 
 #[test]
 fn happy_transfer_moves_kek_and_items_with_no_fee() {
     let ore = fungible_id("iron_ore");
-    let (mut world, mut entries) = two_characters();
-    record(&mut world, &mut entries, Input::DepositKek { token_id: n(1), amount: n(10) });
-    record(&mut world, &mut entries, Input::ImportItem { token_id: n(1), item_id: ore, amount: n(3) });
-    record(
-        &mut world,
-        &mut entries,
-        Input::SendKek { from: n(1), to: n(2), amount: n(4) },
-    );
-    record(
-        &mut world,
-        &mut entries,
-        Input::SendItem { from: n(1), to: n(2), item_id: ore, amount: n(2) },
-    );
+    let mut world = two_characters();
+    world.append_deposit_kek(n(1), n(10)).unwrap();
+    world.append_import_item(n(1), ore, n(3)).unwrap();
+    world.append_send_kek(n(1), n(2), n(4)).unwrap();
+    world.append_send_item(n(1), n(2), ore, n(2)).unwrap();
 
     assert_eq!(world.kek_balance(&n(1)), Some(n(6)));
     assert_eq!(world.kek_balance(&n(2)), Some(n(4)));
@@ -53,17 +33,19 @@ fn happy_transfer_moves_kek_and_items_with_no_fee() {
     let kek_sum = world.kek_balance(&n(1)).unwrap().checked_add(world.kek_balance(&n(2)).unwrap());
     assert_eq!(kek_sum, Some(n(10)), "transfers must not mint or tax KEK");
 
-    let report = replay_world(&WorldDocument { entries }).expect("replay");
+    let report = replay_world(&world.to_document()).expect("replay");
     assert_eq!(report.entries, world.len());
     assert_eq!(report.head, world.head());
     assert_eq!(report.characters.len(), 2);
     assert_eq!(report.characters[0].kek, n(6));
     assert_eq!(report.characters[1].kek, n(4));
+    assert_eq!(report.characters[0].solvency_kek, n(6));
+    assert_eq!(report.characters[1].solvency_kek, n(4));
 }
 
 #[test]
 fn overspend_is_rejected_and_does_not_append() {
-    let (mut world, _) = two_characters();
+    let mut world = two_characters();
     world.append_deposit_kek(n(1), n(5)).unwrap();
     let before_len = world.len();
     let before_head = world.head();
@@ -81,22 +63,33 @@ fn overspend_is_rejected_and_does_not_append() {
     );
     assert_eq!(world.kek_balance(&n(1)), Some(n(5)));
 
-    let mut entries = Vec::new();
-    let mut built = World::new();
-    record(&mut built, &mut entries, Input::Spawn { token_id: n(1), starting_job: 3 });
-    record(&mut built, &mut entries, Input::Spawn { token_id: n(2), starting_job: 1 });
-    record(&mut built, &mut entries, Input::DepositKek { token_id: n(1), amount: n(5) });
+    let mut doc = world.to_document();
     let send = Input::SendKek { from: n(1), to: n(2), amount: n(6) };
-    let bad_index = built.len();
-    let send_hash = entry_hash(&built.head(), bad_index, &send);
-    entries.push(LoggedEntry { hash: send_hash, input: send });
-    entries.push(LoggedEntry {
+    let seq = 99;
+    for token in [n(1), n(2)] {
+        let character = doc.characters.iter_mut().find(|ch| ch.token_id == token).unwrap();
+        let index = character.entries.len() as u64;
+        let prev = if index == 0 {
+            panic!("character log empty");
+        } else {
+            character.entries[index as usize - 1].hash
+        };
+        // The chain head is the last entry hash, which matches character_head after a non-empty log.
+        let hash = entry_hash(&prev, index, &send);
+        character.entries.push(lok_engine::LoggedEntry {
+            hash,
+            input: send.clone(),
+            seq,
+        });
+    }
+    doc.characters[0].entries.push(lok_engine::LoggedEntry {
         hash: [0u8; 32],
         input: Input::SendKek { from: n(1), to: n(2), amount: n(1) },
+        seq: seq + 1,
     });
-    match replay_world(&WorldDocument { entries }).unwrap_err() {
-        ReplayStop::Rejected { index, reason } => {
-            assert_eq!(index, bad_index);
+    match replay_world(&doc).unwrap_err() {
+        lok_engine::ReplayStop::Rejected { index, reason } => {
+            assert_eq!(index, seq);
             assert_eq!(reason, EngineError::InsufficientKek);
         }
         other => panic!("expected rejection, got {other:?}"),
@@ -106,7 +99,7 @@ fn overspend_is_rejected_and_does_not_append() {
 #[test]
 fn list_outbid_and_settle_conserves_kek() {
     let sword = unique_id("iron_sword", 42);
-    let (mut world, _) = two_characters();
+    let mut world = two_characters();
     world.append_spawn(n(3), 2).unwrap();
     world.append_import_item(n(1), sword, n(1)).unwrap();
     world.append_deposit_kek(n(2), n(100)).unwrap();
@@ -155,7 +148,7 @@ fn list_outbid_and_settle_conserves_kek() {
 #[test]
 fn cancel_with_a_bid_returns_item_and_unlocks_kek() {
     let sword = unique_id("iron_sword", 7);
-    let (mut world, _) = two_characters();
+    let mut world = two_characters();
     world.append_import_item(n(1), sword, n(1)).unwrap();
     world.append_deposit_kek(n(2), n(80)).unwrap();
     world.append_list(n(4), n(1), sword, n(1)).unwrap();
@@ -176,7 +169,7 @@ fn cancel_with_a_bid_returns_item_and_unlocks_kek() {
 #[test]
 fn double_list_is_rejected() {
     let ore = fungible_id("iron_ore");
-    let (mut world, _) = two_characters();
+    let mut world = two_characters();
     world.append_import_item(n(1), ore, n(5)).unwrap();
     world.append_list(n(1), n(1), ore, n(2)).unwrap();
     let err = world.append_list(n(2), n(1), ore, n(1)).unwrap_err();
@@ -189,31 +182,38 @@ fn double_list_is_rejected() {
 
 #[test]
 fn replay_cli_stops_at_the_first_bad_world_hash() {
-    let (mut world, mut entries) = two_characters();
-    record(&mut world, &mut entries, Input::DepositKek { token_id: n(1), amount: n(5) });
-    let send = Input::SendKek { from: n(1), to: n(2), amount: n(1) };
-    let good = entry_hash(&world.head(), world.len(), &send);
-    let mut bad = good;
+    let mut world = two_characters();
+    world.append_deposit_kek(n(1), n(5)).unwrap();
+    let doc = world.to_document();
+    let spawn = doc.characters.iter().find(|ch| ch.token_id == n(1)).unwrap().entries[0].clone();
+    let mut bad = spawn.hash;
     bad[31] ^= 0xff;
-    let doc = serde_json::json!({
-        "type": "world",
-        "entries": [
-            {
-                "hash": format!("0x{}", hex::encode(entries[0].hash)),
-                "input": { "type": "spawn", "tokenId": "1", "startingJob": 3 }
-            },
-            {
-                "hash": format!("0x{}", hex::encode(bad)),
-                "input": { "type": "sendKek", "from": "1", "to": "2", "amount": "1" }
-            },
-            {
-                "hash": "0x0000000000000000000000000000000000000000000000000000000000000000",
-                "input": { "type": "sendKek", "from": "1", "to": "2", "amount": "1" }
-            }
-        ]
+    let file = serde_json::json!({
+        "type": "characters",
+        "characters": [{
+            "tokenId": "1",
+            "startingJob": 3,
+            "entries": [
+                {
+                    "seq": 0,
+                    "hash": format!("0x{}", hex::encode(spawn.hash)),
+                    "input": { "type": "spawn", "tokenId": "1", "startingJob": 3 }
+                },
+                {
+                    "seq": 1,
+                    "hash": format!("0x{}", hex::encode(bad)),
+                    "input": { "type": "depositKek", "tokenId": "1", "amount": "1" }
+                },
+                {
+                    "seq": 2,
+                    "hash": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                    "input": { "type": "depositKek", "tokenId": "1", "amount": "1" }
+                }
+            ]
+        }]
     });
     let path = std::env::temp_dir().join(format!("lok-world-bad-{}.json", std::process::id()));
-    std::fs::write(&path, doc.to_string()).unwrap();
+    std::fs::write(&path, file.to_string()).unwrap();
     let stopped = Command::new(env!("CARGO_BIN_EXE_lok-replay"))
         .arg(&path)
         .output()
@@ -221,11 +221,4 @@ fn replay_cli_stops_at_the_first_bad_world_hash() {
     assert_eq!(stopped.status.code(), Some(1));
     let stderr = String::from_utf8(stopped.stderr).unwrap();
     assert!(stderr.contains("bad hash at index 1"), "{stderr}");
-
-    let single = Engine::open(n(1), 3);
-    let err = {
-        let mut engine = single;
-        engine.apply(Input::SendKek { from: n(1), to: n(2), amount: n(1) }).unwrap_err()
-    };
-    assert_eq!(err, EngineError::NotOnCharacterLog);
 }

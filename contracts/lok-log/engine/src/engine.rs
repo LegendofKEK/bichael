@@ -5,7 +5,7 @@ use std::fmt;
 use crate::chain::Chain;
 use crate::event::{entry_hash, Input, Outcome};
 use crate::ids::genesis_root;
-use crate::state::State;
+use crate::state::{Key, State};
 use crate::u256::U256;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -25,7 +25,12 @@ pub enum EngineError {
     BidNotHigher,
     NotSeller,
     NoBid,
-    /// Transfers and the auction house belong on the world log, not a single-character log.
+    /// Checkpoint span is empty, backwards, or past this character's log.
+    BadRange,
+    /// Two character logs give the same sequence number a different payload.
+    ConflictingLog,
+    /// The event does not name this character. Auction events are still applied by `World`
+    /// onto every affected character's own chain; a lone engine has no shared listing book.
     NotOnCharacterLog,
 }
 
@@ -46,7 +51,9 @@ impl fmt::Display for EngineError {
             Self::BidNotHigher => write!(f, "bid is not strictly higher"),
             Self::NotSeller => write!(f, "only the seller can cancel"),
             Self::NoBid => write!(f, "listing has no bid"),
-            Self::NotOnCharacterLog => write!(f, "event is not valid on a single-character log"),
+            Self::BadRange => write!(f, "checkpoint span is empty or out of order"),
+            Self::ConflictingLog => write!(f, "character logs disagree on an event"),
+            Self::NotOnCharacterLog => write!(f, "event does not involve this character"),
         }
     }
 }
@@ -87,25 +94,10 @@ impl Engine {
     }
 
     pub fn apply(&mut self, input: Input) -> Result<Outcome, EngineError> {
-        match &input {
-            Input::Spawn { token_id, starting_job } => {
-                if token_id != &self.token_id || *starting_job != self.starting_job {
-                    return Err(EngineError::SpawnMismatch);
-                }
-                if !self.state.is_empty() {
-                    return Err(EngineError::AlreadySpawned);
-                }
-                self.state.spawn(*token_id, *starting_job);
-            }
-            Input::DepositKek { .. }
-            | Input::ImportItem { .. }
-            | Input::ExportItem { .. }
-            | Input::SendItem { .. }
-            | Input::SendKek { .. }
-            | Input::List { .. }
-            | Input::Bid { .. }
-            | Input::Cancel { .. }
-            | Input::Settle { .. } => return Err(EngineError::NotOnCharacterLog),
+        let saved = self.state.clone();
+        if let Err(err) = self.apply_local(&input) {
+            self.state = saved;
+            return Err(err);
         }
         let index = self.chain.len();
         let prev_hash = self.chain.head();
@@ -120,5 +112,155 @@ impl Engine {
             state_root,
             summary,
         })
+    }
+
+    /// Local delta for events whose payload names this character.
+    /// Sends debit or credit only this side. The counterparty's log carries the same payload
+    /// and applies the other side. List, bid, cancel, and settle need the shared listing book,
+    /// so they are appended by `World` rather than here.
+    fn apply_local(&mut self, input: &Input) -> Result<(), EngineError> {
+        match input {
+            Input::Spawn { token_id, starting_job } => {
+                if token_id != &self.token_id || *starting_job != self.starting_job {
+                    return Err(EngineError::SpawnMismatch);
+                }
+                if !self.state.is_empty() {
+                    return Err(EngineError::AlreadySpawned);
+                }
+                self.state.spawn(*token_id, *starting_job);
+                Ok(())
+            }
+            Input::DepositKek { token_id, amount } => self.credit_kek(*token_id, *amount),
+            Input::WithdrawKek { token_id, amount } => self.debit_kek(*token_id, *amount),
+            Input::ImportItem { token_id, item_id, amount } => self.credit_item(*token_id, *item_id, *amount),
+            Input::ExportItem { token_id, item_id, amount } => self.debit_item(*token_id, *item_id, *amount),
+            Input::SendKek { from, to, amount } => self.transfer_kek(*from, *to, *amount),
+            Input::SendItem { from, to, item_id, amount } => self.transfer_item(*from, *to, *item_id, *amount),
+            Input::List { .. } | Input::Bid { .. } | Input::Cancel { .. } | Input::Settle { .. } => {
+                Err(EngineError::NotOnCharacterLog)
+            }
+        }
+    }
+
+    fn involves(&self, token_id: &U256) -> Result<(), EngineError> {
+        if token_id != &self.token_id {
+            return Err(EngineError::NotOnCharacterLog);
+        }
+        if self.state.is_empty() {
+            return Err(EngineError::NotSpawned);
+        }
+        Ok(())
+    }
+
+    fn credit_kek(&mut self, token_id: U256, amount: U256) -> Result<(), EngineError> {
+        self.involves(&token_id)?;
+        if amount == U256::ZERO {
+            return Err(EngineError::ZeroAmount);
+        }
+        let next = self.state.get(&Key::Kek).checked_add(amount).ok_or(EngineError::Overflow)?;
+        self.state.set_kek(next);
+        Ok(())
+    }
+
+    fn debit_kek(&mut self, token_id: U256, amount: U256) -> Result<(), EngineError> {
+        self.involves(&token_id)?;
+        if amount == U256::ZERO {
+            return Err(EngineError::ZeroAmount);
+        }
+        let next = self
+            .state
+            .get(&Key::Kek)
+            .checked_sub(amount)
+            .ok_or(EngineError::InsufficientKek)?;
+        self.state.set_kek(next);
+        Ok(())
+    }
+
+    fn credit_item(&mut self, token_id: U256, item_id: U256, amount: U256) -> Result<(), EngineError> {
+        self.involves(&token_id)?;
+        if amount == U256::ZERO {
+            return Err(EngineError::ZeroAmount);
+        }
+        let next = self
+            .state
+            .get(&Key::Item(item_id))
+            .checked_add(amount)
+            .ok_or(EngineError::Overflow)?;
+        self.state.set_item(item_id, next);
+        Ok(())
+    }
+
+    fn debit_item(&mut self, token_id: U256, item_id: U256, amount: U256) -> Result<(), EngineError> {
+        self.involves(&token_id)?;
+        if amount == U256::ZERO {
+            return Err(EngineError::ZeroAmount);
+        }
+        let next = self
+            .state
+            .get(&Key::Item(item_id))
+            .checked_sub(amount)
+            .ok_or(EngineError::InsufficientItem)?;
+        self.state.set_item(item_id, next);
+        Ok(())
+    }
+
+    fn transfer_kek(&mut self, from: U256, to: U256, amount: U256) -> Result<(), EngineError> {
+        if from == to {
+            return Err(EngineError::SelfTransfer);
+        }
+        if amount == U256::ZERO {
+            return Err(EngineError::ZeroAmount);
+        }
+        if from != self.token_id && to != self.token_id {
+            return Err(EngineError::NotOnCharacterLog);
+        }
+        if self.state.is_empty() {
+            return Err(EngineError::NotSpawned);
+        }
+        if from == self.token_id {
+            let next = self
+                .state
+                .get(&Key::Kek)
+                .checked_sub(amount)
+                .ok_or(EngineError::InsufficientKek)?;
+            self.state.set_kek(next);
+        }
+        if to == self.token_id {
+            let next = self.state.get(&Key::Kek).checked_add(amount).ok_or(EngineError::Overflow)?;
+            self.state.set_kek(next);
+        }
+        Ok(())
+    }
+
+    fn transfer_item(&mut self, from: U256, to: U256, item_id: U256, amount: U256) -> Result<(), EngineError> {
+        if from == to {
+            return Err(EngineError::SelfTransfer);
+        }
+        if amount == U256::ZERO {
+            return Err(EngineError::ZeroAmount);
+        }
+        if from != self.token_id && to != self.token_id {
+            return Err(EngineError::NotOnCharacterLog);
+        }
+        if self.state.is_empty() {
+            return Err(EngineError::NotSpawned);
+        }
+        if from == self.token_id {
+            let next = self
+                .state
+                .get(&Key::Item(item_id))
+                .checked_sub(amount)
+                .ok_or(EngineError::InsufficientItem)?;
+            self.state.set_item(item_id, next);
+        }
+        if to == self.token_id {
+            let next = self
+                .state
+                .get(&Key::Item(item_id))
+                .checked_add(amount)
+                .ok_or(EngineError::Overflow)?;
+            self.state.set_item(item_id, next);
+        }
+        Ok(())
     }
 }

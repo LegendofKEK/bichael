@@ -1,4 +1,5 @@
 //! Replay a hash-chained lok log. Stops at the first bad hash.
+//! A `characters` document is one chain per character, merged by `seq`.
 
 use std::env;
 use std::fs;
@@ -61,11 +62,12 @@ fn main() -> ExitCode {
                 );
                 for character in &report.characters {
                     println!(
-                        "token={} state_root={} summary={} kek={}",
+                        "token={} state_root={} summary={} kek={} solvency={}",
                         character.token_id,
                         hex32(&character.state_root),
                         character.summary.to_hex(),
-                        character.kek
+                        character.kek,
+                        character.solvency_kek
                     );
                 }
                 ExitCode::SUCCESS

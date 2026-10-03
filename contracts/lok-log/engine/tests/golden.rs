@@ -128,9 +128,9 @@ fn replay_stops_at_the_first_bad_hash() {
         token_id: token,
         starting_job: 3,
         entries: vec![
-            lok_engine::LoggedEntry { hash: first, input: spawn.clone() },
-            lok_engine::LoggedEntry { hash: bad, input: spawn.clone() },
-            lok_engine::LoggedEntry { hash: [0u8; 32], input: spawn },
+            lok_engine::LoggedEntry { hash: first, input: spawn.clone(), seq: 0 },
+            lok_engine::LoggedEntry { hash: bad, input: spawn.clone(), seq: 1 },
+            lok_engine::LoggedEntry { hash: [0u8; 32], input: spawn, seq: 2 },
         ],
     };
     match replay(&doc).unwrap_err() {
