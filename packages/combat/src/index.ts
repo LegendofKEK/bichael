@@ -142,10 +142,36 @@ export const REST_TICK = {
   tpDrain: 40,
 } as const;
 
-/** XP needed to go from `level` → `level + 1` (xp on character is progress within the level). */
+/**
+ * XP needed to go from `level` to `level + 1`.
+ * One entry per level 1-75. Levels 1-74 buy the next level (the cap stays 75).
+ * Level 75's cost is only the existing post-cap skill echo. It does not create a level 76.
+ *
+ * Design bands (cost low-high, cumulative XP after paying that band):
+ * 1-10 500-2400 -> 13350; 11-20 2600-4400 -> 48350; 21-30 4600-5700 -> 100550;
+ * 31-40 5800-6700 -> 163050; 41-50 6800-7700 -> 235550; 51-60 7800-17600 -> 358550;
+ * 61-70 18800-32000 -> 611350; 71-75 34000-44000 -> 845350.
+ *
+ * Endpoints are exact. Interior levels are the rounded linear step from low to high.
+ * The pure line does not hit the band sums, so the integer remainder (plus or minus)
+ * is spread evenly across interior levels, with any leftover +/-1 on the later interiors.
+ * Band 71-75 is 39000 short of its total on that line, so levels 72-74 sit above the
+ * level-75 endpoint. That dip is what keeps both endpoints and the band total.
+ */
+const XP_TO_NEXT: readonly number[] = [
+  500, 567, 778, 989, 1200, 1412, 1623, 1835, 2046, 2400,
+  2600, 2800, 3000, 3200, 3400, 3600, 3800, 4000, 4200, 4400,
+  4600, 4809, 4931, 5054, 5176, 5299, 5421, 5544, 5666, 5700,
+  5800, 5900, 6000, 6100, 6200, 6300, 6400, 6500, 6600, 6700,
+  6800, 6900, 7000, 7100, 7200, 7300, 7400, 7500, 7600, 7700,
+  7800, 8389, 9478, 10567, 11656, 12744, 13833, 14922, 16011, 17600,
+  18800, 20117, 21583, 23050, 24517, 25983, 27450, 28917, 30383, 32000,
+  34000, 49500, 52000, 54500, 44000,
+];
+
 export function xpToNextLevel(level: number): number {
-  const lv = Math.max(1, Math.floor(level));
-  return 50 + lv * 50;
+  const lv = Math.max(1, Math.min(XP_TO_NEXT.length, Math.floor(level)));
+  return XP_TO_NEXT[lv - 1]!;
 }
 
 /** @deprecated Vitals come from jobVitalsAtLevel — kept for older imports. */

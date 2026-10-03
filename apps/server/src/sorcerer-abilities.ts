@@ -8,7 +8,8 @@ import {
   type SorcererAbilityId,
   type SorcererElement,
 } from "@bellgrave/combat";
-import { ITEM, PH_HUB_SPAWN, paleHollowStandHeight } from "@bellgrave/config";
+import { PH_HUB_SPAWN, paleHollowStandHeight } from "@bellgrave/config";
+import { SIGNATURE_WEAPON_IDS, signatureWeaponEquipped } from "./starter-kit";
 import type { AbilityId } from "@bellgrave/protocol";
 
 export type SorcererPlayer = {
@@ -80,12 +81,9 @@ export type SorcererHooks = {
   };
 };
 
-function invAmount(inv: SorcererPlayer["inventory"], tokenId: number): number {
-  return inv.find((i) => i.tokenId === tokenId)?.amount ?? 0;
-}
 
 export function staffEquipped(p: SorcererPlayer): boolean {
-  return p.equip.main === ITEM.STAFF_ASHBEAM && invAmount(p.inventory, ITEM.STAFF_ASHBEAM) > 0;
+  return signatureWeaponEquipped(p, SIGNATURE_WEAPON_IDS.sorcerer);
 }
 
 

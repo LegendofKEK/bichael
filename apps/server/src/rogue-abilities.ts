@@ -11,7 +11,7 @@ import {
   isJobId,
   type JobId,
 } from "@bellgrave/combat";
-import { ITEM } from "@bellgrave/config";
+import { SIGNATURE_WEAPON_IDS, signatureWeaponEquipped } from "./starter-kit";
 import type { AbilityId } from "@bellgrave/protocol";
 
 export type RoguePlayer = {
@@ -73,12 +73,9 @@ export type RogueHooks = {
   };
 };
 
-function invAmount(inv: RoguePlayer["inventory"], tokenId: number): number {
-  return inv.find((i) => i.tokenId === tokenId)?.amount ?? 0;
-}
 
 export function daggerEquipped(p: RoguePlayer): boolean {
-  return p.equip.main === ITEM.DAGGER_IRON && invAmount(p.inventory, ITEM.DAGGER_IRON) > 0;
+  return signatureWeaponEquipped(p, SIGNATURE_WEAPON_IDS.rogue);
 }
 
 export function resolveRogueAbility(

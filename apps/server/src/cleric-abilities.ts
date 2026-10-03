@@ -7,7 +7,7 @@ import {
   isClericAbilityId,
   type ClericAbilityId,
 } from "@bellgrave/combat";
-import { ITEM } from "@bellgrave/config";
+import { SIGNATURE_WEAPON_IDS, signatureWeaponEquipped } from "./starter-kit";
 import type { AbilityId } from "@bellgrave/protocol";
 
 export type ClericPlayer = {
@@ -90,12 +90,9 @@ export type ClericHooks = {
   };
 };
 
-function invAmount(inv: ClericPlayer["inventory"], tokenId: number): number {
-  return inv.find((i) => i.tokenId === tokenId)?.amount ?? 0;
-}
 
 export function staffEquipped(p: ClericPlayer): boolean {
-  return p.equip.main === ITEM.STAFF_ASHBEAM && invAmount(p.inventory, ITEM.STAFF_ASHBEAM) > 0;
+  return signatureWeaponEquipped(p, SIGNATURE_WEAPON_IDS.cleric);
 }
 
 export function clericMagDtMul(p: ClericPlayer, now: number): number {
@@ -238,7 +235,7 @@ export function resolveClericAbility(
   }
   // Signature staff only when this job is main (support dual-job skips it).
   if (def.staffRequired && p.job === "cleric" && !staffEquipped(p)) {
-    hooks.pushLog(p, "Equip your staff first.");
+    hooks.pushLog(p, "Equip your club or staff first.");
     return true;
   }
 

@@ -701,7 +701,7 @@ export function Hud() {
 
   if (phase !== "play" || !snapshot || !me) return null;
   const you = snapshot.you;
-  const potions = you.inventory.find((i) => i.tokenId === ITEM.POTION)?.amount ?? 0;
+  const potions = you.inventory.reduce((n, i) => n + (i.tokenId === ITEM.POTION ? i.amount : 0), 0);
   const shortWallet = wallet ? `${wallet.slice(0, 6)}…${wallet.slice(-4)}` : "";
   const hpPct = (me.hp / me.maxHp) * 100;
   const mpPct = me.maxMp ? (me.mp / me.maxMp) * 100 : 0;

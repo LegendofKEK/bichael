@@ -14,7 +14,7 @@ import {
 
 } from "@bellgrave/combat";
 
-import { ITEM } from "@bellgrave/config";
+import { SIGNATURE_WEAPON_IDS, signatureWeaponEquipped } from "./starter-kit";
 
 import type { AbilityId } from "@bellgrave/protocol";
 
@@ -118,22 +118,11 @@ export type FighterHooks = {
 
 
 
-function invAmount(inv: FighterPlayer["inventory"], tokenId: number): number {
-
-  return inv.find((i) => i.tokenId === tokenId)?.amount ?? 0;
-
-}
 
 
 
 export function greatswordEquipped(p: FighterPlayer): boolean {
-
-  return (
-
-    p.equip.main === ITEM.GREATSWORD_IRON && invAmount(p.inventory, ITEM.GREATSWORD_IRON) > 0
-
-  );
-
+  return signatureWeaponEquipped(p, SIGNATURE_WEAPON_IDS.fighter);
 }
 
 

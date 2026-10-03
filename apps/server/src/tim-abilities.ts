@@ -8,7 +8,7 @@ import {
   isTimAbilityId,
     isTrainerFreeAbility,
 } from "@bellgrave/combat";
-import { ITEM } from "@bellgrave/config";
+import { SIGNATURE_WEAPON_IDS, signatureWeaponEquipped } from "./starter-kit";
 import type { AbilityId } from "@bellgrave/protocol";
 
 export type TimPlayer = {
@@ -70,12 +70,9 @@ export type TimMob = {
   paraUntil: number;
 };
 
-function invAmount(inv: TimPlayer["inventory"], tokenId: number): number {
-  return inv.find((i) => i.tokenId === tokenId)?.amount ?? 0;
-}
 
 export function staffEquipped(p: TimPlayer): boolean {
-  return p.equip.main === ITEM.STAFF_ASHBEAM && invAmount(p.inventory, ITEM.STAFF_ASHBEAM) > 0;
+  return signatureWeaponEquipped(p, SIGNATURE_WEAPON_IDS.time_mage);
 }
 
 export function playerStance(p: TimPlayer): Stance {
